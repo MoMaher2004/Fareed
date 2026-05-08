@@ -1,0 +1,740 @@
+{
+description: "I have backend endpoints of an AI assistant called 'Fareed' and i want to build a front-end web page for it.",
+languages : ["en(us)"],
+style: "futuristic",
+color_pallet: {
+description: "The attached colors are good but you dont have to use all of them",
+colors: [
+"#55C1FF",
+"#A682FF",
+"#5887FF",
+"#102E4A",
+"#715AFF"
+]
+},
+features: [
+"light and dark themes. dark is default.",
+"BASE_URL constant at the beginning of script file that referes to the backend server.",
+chat_window: {
+description: "the window that contains the current chat between user and agent like any chat window",
+features: [
+"upload and send images, pdfs, audio, textual files like [txt, py, html, css, etc...]",
+"show conversation messages",
+"show hot answers if available as buttons above message field",
+right_drawer: {
+job: "show current conversation history from array of objects in a user frindly cards view" ,
+messages_types: [
+"ai/assistant message",
+"tools calling",
+"tool respond",
+"system message",
+"user message",
+"any other types of messages"
+],
+cards_style: "cards are expandable to show full content. each collapesed card shows message type and a part of it",
+input_example: [{'role': 'system', 'content': 'You are Fareed, The personal assistant of Mohamed Maher. You are here to assist Mohamed Maher and answer his questions. Whenever you are asked to do something, check first if you have a detecated tool for that, if so, use it, if not, think about a workaround using one of existing tool that can indirectly do it then ask the user to use this tool in that way or not. Your answers should be always summarized unless you are asked for details.'}, {'role': 'assistant', 'content': "Hi, I'm Fareed. How can I help you?"}, {'role': 'user', 'content': 'hello'}, {'role': 'user', 'content': 'what is the time now'}, {'role': 'assistant', 'content': "I'll check the current time for you.", 'tool_calls': [{'name': 'time', 'type': 'function', 'function': {'name': 'time', 'arguments': '{}'}, 'arguments': '{}', 'id': 'call_00_FojrTfNkASkAgPrJwnCiaOyg'}]}, {'role': 'tool', 'tool_call_id': 'call_00_FojrTfNkASkAgPrJwnCiaOyg', 'content': '2026-04-06 17:40:28'}, {'role': 'user', 'content': 'you can call multible functions in sequence at the same response, try it with time function'}, {'role': 'assistant', 'content': "I'll call the time function multiple times in sequence to demonstrate this capability.", 'tool_calls': [{'name': 'time', 'type': 'function', 'function': {'name': 'time', 'arguments': '{}'}, 'arguments': '{}', 'id': 'call_00_KVfdfmgLo16LIP3yuQwEiuEx'}, {'name': 'time', 'type': 'function', 'function': {'name': 'time', 'arguments': '{}'}, 'arguments': '{}', 'id': 'call_01_n6OEc4Z6mEg4oiJxE8rVRLzF'}, {'name': 'time', 'type': 'function', 'function': {'name': 'time', 'arguments': '{}'}, 'arguments': '{}', 'id': 'call_02_Hg3hZOEk8q9Z5LWb4i0Hoh9y'}]}, {'role': 'tool', 'tool_call_id': 'call_00_KVfdfmgLo16LIP3yuQwEiuEx', 'content': '2026-04-06 17:40:34'}, {'role': 'tool', 'tool_call_id': 'call_01_n6OEc4Z6mEg4oiJxE8rVRLzF', 'content': '2026-04-06 17:40:34'}, {'role': 'tool', 'tool_call_id': 'call_02_Hg3hZOEk8q9Z5LWb4i0Hoh9y', 'content': '2026-04-06 17:40:34'}]
+},
+left_drawer: {
+job: "show conversations histories from array of objects in a user frindly cards view. on click on any card, a request is sent to get the conversation messages then clear both messages in main screen and history in the right drawer then replace them with the messages from the request",
+cards_style: "each card shows title or part of title of conversation",
+input_example: [{title: "conv1", id:512},{title: "conv2", id:513},{title: "conv3", id:514}]
+},
+"a checkbox that if checked, the message will be sent as system message instead of user message",
+"system messages appear in a warning style like warm background or warm borders or any similar style",
+"messages from agent can contain code in any language, show it in line-numerated colorful viewer like vscode view but read-only with button to copy",
+"messages from agent can contain terminal commands, show in a box with copy, accept decline buttons",
+"user can choose which model continue conversation with from a dropdown menu at the top of page",
+"user can start a voice call with the model which will disable message field",
+"multible files drag and drop is supported",
+"user can add text to message field using voice. user clicks on a button to start recording audio, the button icon changes to the meaning of stop recording, after record stops the audio is sent",
+"settings button that opens a popup window for settings and update settings on any change without a need to click 'save' button"
+],
+main_window: True,
+endpoints: [
+{
+description: "get settings as JSON object",
+url: "/settings",
+method: "get",
+inputs: None,
+outputs: ["settings"],
+output_examples: [
+example1: {
+settings: {
+'set1': {
+type: 'dropdown menu',
+options: [
+{
+name: 'op1',
+value: 'val1',
+is_selected: False
+},
+{
+name: 'op2',
+value: 'val2',
+is_selected: True
+}
+]
+},
+'set2': {
+type: 'checkbox',
+checked: True
+},
+'set3': {
+type: 'checklist',
+items: [
+('i1', True),
+('i2', True),
+('i3', False)
+]
+},
+'set4': {
+type: 'radio button',
+options: [
+{
+name: 'op1',
+value: 'val1',
+is_selected: False
+},
+{
+name: 'op2',
+value: 'val2',
+is_selected: True
+}
+]
+},
+'set5': {
+type: 'text',
+value: 'val',
+placeholder: 'set4 value'
+}
+}
+}
+]
+},
+{
+description: "modify settings",
+url: "/settings",
+method: "post",
+inputs: ["settings"],
+outputs: None,
+inputs_examples: [
+example1: {
+settings: {
+'set1': "op2",
+'set2': False,
+'set3': [
+('i1', False),
+('i2', True),
+('i3', False)
+],
+'set4': 'op1',
+'set5': 'val'
+}
+}
+]
+},
+{
+description: "speech to text for voice typing in message field",
+url: "/stt",
+method: "get",
+inputs: [],
+files: ["audio"],
+outputs: ["text"]
+},
+{
+description: "voice call which will send and recieve stream of audio between user and backend",
+url: "/call",
+method: "websocket",
+inputs: ["audio"],
+outputs: ["audio"]
+},
+{
+description: "retrieve conversation by its id",
+url: "/conversations/:id",
+method: "get",
+inputs: ["id"],
+outputs: ["messages"]
+},
+{
+description: "retrieve conversations list",
+url: "/conversations",
+method: "get",
+inputs: [],
+outputs: ["conversations"]
+},
+{
+description: "sending messages from ui and recieving responses as chuncks stream from backend",
+url: "/chat",
+method: "websocket",
+inputs: ["text", "files"],
+outputs: ["response"],
+output_examples: [
+example1: {
+response: [
+"<*&TEX",
+"T&*>Here",
+" is your",
+" code:",
+"<*&CODE",
+":filename",
+"=main.py:lang=python",
+"&*>",
+"print("Hello")",
+"<*&TEXT&",
+"*>Run it",
+"<*&COMMAND&",
+"*>python3 main.py",
+"<*&END&*>"
+]
+},
+example2: {
+response: [
+"<*&TEXT&*>Wa",
+"tch this:",
+"<*&YOUTUBE&*>https://",
+"www.youtube.com/embed/CG48pSyK8GU",
+"<*&END&*>",
+]
+},
+example3: {
+response: [
+"<*&TEXT&*>",
+"Read the following list:",
+"<*&HTML&*><ol><li",
+">item1</li>",
+"<li>item2</li>",
+"</ol><*&TEX",
+"T&*>Another text",
+"<*&END&*>",
+]
+}
+],
+tags: [
+{
+tag: "<*&TEXT&*>",
+description: "for text content"
+},
+{
+tag: "<*&CODE:filename=...:lang=...&*>",
+description: "for code content"
+},
+{
+tag: "<*&COMMAND&*>",
+description: "for commands"
+},
+{
+tag: "<*&IMAGE&*>",
+description: "for image"
+},
+{
+tag: "<*&PDF&*>",
+description: "for PDF file"
+},
+{
+tag: "<*&AUDIO&*>",
+description: "for audio file"
+},
+{
+tag: "<*&YOUTUBE&*>",
+description: "for youtube embedding"
+},
+{
+tag: "<*&HOTANSWER&*>",
+description: "for short hot answer"
+},
+{
+tag: "<*&HTML&*>",
+description: "for tags of text formating like: H1-6, ul, ol, li, table, coloring, etc..."
+},
+{
+tag: "<*&TEXT&*>",
+description: "to end the current message"
+},
+]
+notes: [
+"all file types are downloadable using download buttons",
+"audio files can be played in the ui using audio player without need to download them",
+"video files can be played in the ui using video player without need to download them",
+"image files are shown in the UI as images and if clicked, the clicked image will expand to full screen",
+"if the file is pdf, show a part of it in the message, if the user clicked on it, a window pops up showing the file",
+"if type is youtube, show youtube embedding iframe with src value equal content attribute",
+"code tag has filename as attribute and language as attribute",
+"send button is disabled untill last chunck is recieved"
+]
+},
+]
+}
+],
+technology: [
+"html",
+"css",
+"javascript",
+"bootstrap"
+],
+base_files: [
+{
+name: "index.html",
+content: """<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fareed AI Assistant</title>
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <!-- Prism.js (Syntax Highlighting) -->
+  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Top Navbar -->
+  <nav class="navbar futuristic-navbar">
+<div class="container-fluid px-3">
+  <a class="navbar-brand d-flex align-items-center" href="#">
+<i class="bi bi-stars me-2"></i> Fareed
+  </a>
+  <div class="d-flex align-items-center gap-2 gap-md-3">
+<!-- Model Selector -->
+<select class="form-select form-select-sm futuristic-select" id="modelSelector">
+  <option value="fareed-pro">Fareed Pro</option>
+  <option value="fareed-fast">Fareed Fast</option>
+  <option value="fareed-code">Fareed Code</option>
+</select>
+<!-- Voice Call Toggle -->
+<button class="btn btn-sm btn-outline-future" id="voiceCallBtn" title="Start Voice Call">
+  <i class="bi bi-telephone"></i>
+</button>
+<!-- Theme Toggle -->
+<button class="btn btn-sm btn-outline-future" id="themeToggle" title="Toggle Theme">
+  <i class="bi bi-moon-stars-fill"></i>
+</button>
+<!-- History Drawer Toggle -->
+<button class="btn btn-sm btn-outline-future" data-bs-toggle="offcanvas" data-bs-target="#historyDrawer" title="Conversation History">
+  <i class="bi bi-clock-history"></i>
+</button>
+  </div>
+</div>
+  </nav>
+
+  <!-- Main Chat Window -->
+  <main class="chat-container">
+<div id="chatMessages" class="chat-messages">
+  <div class="message ai-message">
+<div class="message-header"><i class="bi bi-robot me-1"></i> Fareed</div>
+<div class="message-content">Hello! I'm Fareed. How can I assist you today?</div>
+  </div>
+</div>
+
+<!-- Hot Answers / Suggestions -->
+<div id="hotAnswers" class="hot-answers">
+  <button class="btn btn-sm btn-suggestion" data-query="Explain quantum computing">Explain quantum computing</button>
+  <button class="btn btn-sm btn-suggestion" data-query="Generate a REST API in Python">Generate a REST API</button>
+  <button class="btn btn-sm btn-suggestion" data-query="Summarize the latest news">Latest news summary</button>
+</div>
+
+<!-- Input Area -->
+<div class="input-area">
+  <div id="attachmentPreview" class="attachment-preview d-none"></div>
+  <div class="input-wrapper">
+<textarea id="userInput" class="form-control futuristic-textarea" placeholder="Type your message..." rows="1"></textarea>
+<div class="input-actions">
+  <label for="fileUpload" class="action-btn" title="Upload Image/PDF">
+<i class="bi bi-paperclip"></i>
+<input type="file" id="fileUpload" class="d-none" accept=".jpg,.jpeg,.png,.gif,.pdf,.txt">
+  </label>
+  <button class="action-btn" id="voiceInputBtn" title="Voice Input">
+<i class="bi bi-mic"></i>
+  </button>
+  <div class="form-check form-switch ms-1 align-self-center" title="Send as System Message">
+<input class="form-check-input futuristic-switch" type="checkbox" id="systemMsgToggle">
+<label class="form-check-label text-xs" for="systemMsgToggle">SYS</label>
+  </div>
+  <button id="sendBtn" class="btn btn-send futuristic-btn">
+<i class="bi bi-send-fill"></i>
+  </button>
+</div>
+  </div>
+</div>
+  </main>
+
+  <!-- Right History Drawer -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="historyDrawer">
+<div class="offcanvas-header futuristic-header">
+  <h5 class="offcanvas-title"><i class="bi bi-journal-text me-2"></i>History</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+</div>
+<div class="offcanvas-body p-0" id="historyList">
+  <!-- Dynamic history items -->
+</div>
+  </div>
+
+  <!-- Voice Call Overlay -->
+  <div id="voiceCallOverlay" class="voice-call-overlay d-none">
+<div class="call-status text-center text-white">
+  <i class="bi bi-telephone-incoming-call pulse display-1"></i>
+  <h4 class="mt-3">Voice Call Active</h4>
+  <p id="callStatusText" class="opacity-75">Connecting to Fareed...</p>
+</div>
+<button id="endCallBtn" class="btn btn-danger btn-lg rounded-pill px-4">
+  <i class="bi bi-telephone-x-fill me-2"></i>End Call
+</button>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>"""
+},
+{
+name: "style.css",
+content: """:root {
+  --bg-primary: #080b12;
+  --bg-secondary: #102E4A;
+  --bg-card: rgba(16, 46, 74, 0.6);
+  --text-primary: #e0e7ff;
+  --text-secondary: #94a3b8;
+  --accent-blue: #55C1FF;
+  --accent-purple: #A682FF;
+  --accent-indigo: #5887FF;
+  --accent-deep: #715AFF;
+  --border-color: rgba(85, 193, 255, 0.15);
+  --glow: 0 0 12px rgba(85, 193, 255, 0.4);
+  --glass: rgba(255, 255, 255, 0.05);
+}
+
+[data-bs-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e2e8f0;
+  --bg-card: rgba(255, 255, 255, 0.85);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+  --accent-indigo: #4f46e5;
+  --accent-deep: #6366f1;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --glow: 0 0 10px rgba(59, 130, 246, 0.2);
+  --glass: rgba(0, 0, 0, 0.03);
+}
+
+* { box-sizing: border-box; transition: background 0.25s, color 0.25s, border 0.25s, box-shadow 0.25s; }
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  overflow: hidden;
+  background-image: 
+radial-gradient(circle at 10% 20%, rgba(85, 193, 255, 0.08) 0%, transparent 25%),
+radial-gradient(circle at 90% 80%, rgba(113, 90, 255, 0.08) 0%, transparent 25%);
+}
+
+.futuristic-navbar {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  height: 64px;
+}
+.navbar-brand { color: var(--accent-blue) !important; font-weight: 700; text-shadow: var(--glow); }
+.futuristic-select, .form-select {
+  background: var(--glass); border: 1px solid var(--border-color); color: var(--text-primary);
+}
+.btn-outline-future { border-color: var(--border-color); color: var(--accent-blue); background: transparent; }
+.btn-outline-future:hover { background: var(--glass); color: var(--accent-indigo); box-shadow: var(--glow); }
+
+.chat-container {
+  height: calc(100vh - 64px);
+  display: flex; flex-direction: column;
+  max-width: 1100px; margin: 0 auto; padding: 1rem;
+}
+.chat-messages { flex: 1; overflow-y: auto; padding: 0.5rem 1rem; display: flex; flex-direction: column; gap: 1rem; }
+.chat-messages::-webkit-scrollbar { width: 6px; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--accent-deep); border-radius: 3px; }
+
+.message { max-width: 85%; padding: 0.8rem 1.2rem; border-radius: 14px; position: relative; line-height: 1.6; word-break: break-word; }
+.user-message { align-self: flex-end; background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple)); color: #fff; border-bottom-right-radius: 4px; }
+.ai-message { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border-color); border-bottom-left-radius: 4px; backdrop-filter: blur(8px); }
+.system-message { align-self: center; background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-size: 0.85rem; border: 1px dashed rgba(245, 158, 11, 0.4); text-align: center; }
+.message-header { font-size: 0.7rem; font-weight: 600; margin-bottom: 0.3rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Code Blocks (VSCode-like) */
+.code-wrapper { position: relative; margin: 0.5rem 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: #1e1e1e !important; }
+pre.code-block { margin: 0 !important; background: transparent !important; padding: 1rem 0.5rem 1rem 3.5rem !important; max-height: 400px; overflow: auto; font-size: 0.88rem; counter-reset: line; }
+pre.code-block code { background: transparent !important; display: block; }
+pre.code-block code::before { counter-increment: line; content: counter(line); display: inline-block; width: 2rem; margin-left: -3rem; text-align: right; color: #6e7681; border-right: 1px solid #333; padding-right: 0.75rem; }
+.code-actions { position: absolute; top: 6px; right: 6px; z-index: 2; }
+.code-actions button { background: rgba(255,255,255,0.1); border: none; color: #ccc; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; }
+.code-actions button:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+/* Terminal Box */
+.terminal-box { background: #0b121c; color: #10b981; font-family: 'Fira Code', monospace; padding: 0.9rem; border-radius: 8px; margin: 0.5rem 0; border: 1px solid #1f2937; border-left: 3px solid var(--accent-blue); }
+.terminal-actions { display: flex; gap: 0.5rem; margin-top: 0.6rem; }
+.terminal-actions button { font-size: 0.75rem; padding: 4px 10px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: #cbd5e1; cursor: pointer; }
+.terminal-actions button:hover { background: #1e293b; }
+
+.hot-answers { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.3rem 0; margin-bottom: 0.3rem; scrollbar-width: none; }
+.hot-answers::-webkit-scrollbar { display: none; }
+.btn-suggestion { background: var(--glass); border: 1px solid var(--border-color); color: var(--text-secondary); white-space: nowrap; font-size: 0.8rem; padding: 0.4rem 0.8rem; border-radius: 20px; transition: 0.2s; }
+.btn-suggestion:hover { border-color: var(--accent-purple); color: var(--accent-purple); background: rgba(166, 130, 255, 0.1); }
+
+.input-area { background: var(--bg-card); backdrop-filter: blur(12px); border-top: 1px solid var(--border-color); padding: 0.8rem; border-radius: 16px 16px 0 0; }
+.input-wrapper { display: flex; align-items: flex-end; background: var(--glass); border: 1px solid var(--border-color); border-radius: 14px; padding: 0.5rem; gap: 0.4rem; }
+.futuristic-textarea { background: transparent; border: none; color: var(--text-primary); resize: none; outline: none; padding: 0.6rem 0.5rem; flex: 1; font-size: 0.95rem; min-height: 24px; max-height: 150px; }
+.futuristic-textarea::placeholder { color: var(--text-secondary); opacity: 0.7; }
+.input-actions { display: flex; align-items: center; gap: 0.5rem; }
+.action-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.4rem; border-radius: 50%; transition: 0.2s; }
+.action-btn:hover { color: var(--accent-blue); background: rgba(255,255,255,0.05); }
+.futuristic-switch { border-color: var(--accent-deep); }
+.futuristic-switch:checked { background-color: var(--accent-purple); border-color: var(--accent-purple); }
+.btn-send { background: linear-gradient(135deg, var(--accent-indigo), var(--accent-deep)); border: none; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; transition: 0.2s; }
+.btn-send:hover { transform: scale(1.05); box-shadow: var(--glow); }
+
+.attachment-preview { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+.attachment-chip { background: var(--glass); border: 1px solid var(--border-color); padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; display: flex; align-items: center; gap: 0.4rem; }
+.attachment-chip i { cursor: pointer; color: var(--text-secondary); }
+.attachment-chip img { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+
+/* Drawer */
+.offcanvas { background: var(--bg-card) !important; color: var(--text-primary) !important; border-left: 1px solid var(--border-color) !important; backdrop-filter: blur(16px); width: 320px; }
+.offcanvas-header { border-bottom: 1px solid var(--border-color); }
+.history-item { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; cursor: pointer; transition: 0.15s; }
+.history-item:hover { background: var(--glass); }
+.history-item.type-user { border-left: 3px solid var(--accent-blue); }
+.history-item.type-ai { border-left: 3px solid var(--accent-purple); }
+.history-item.type-tool { border-left: 3px solid #f59e0b; }
+.history-item.type-response { border-left: 3px solid #10b981; }
+.history-item.type-system { border-left: 3px solid #ef4444; }
+.history-meta { font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 2px; display: flex; justify-content: space-between; }
+
+/* Voice Call Overlay */
+.voice-call-overlay { position: fixed; inset: 0; background: rgba(8, 11, 18, 0.95); backdrop-filter: blur(20px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1050; }
+.pulse { animation: pulse-anim 1.5s infinite; color: #ef4444; }
+@keyframes pulse-anim { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } 100% { opacity: 1; transform: scale(1); } }
+
+.text-xs { font-size: 0.7rem; color: var(--text-secondary); margin-left: 4px; }
+.d-none { display: none !important; }
+@media (max-width: 768px) { .chat-container { padding: 0.5rem; } .message { max-width: 95%; } .offcanvas { width: 85vw !important; } }"""
+},
+{
+name: "script.js",
+content: """document.addEventListener('DOMContentLoaded', () => {
+  const chatMessages = document.getElementById('chatMessages');
+  const userInput = document.getElementById('userInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const fileUpload = document.getElementById('fileUpload');
+  const attachmentPreview = document.getElementById('attachmentPreview');
+  const systemMsgToggle = document.getElementById('systemMsgToggle');
+  const themeToggle = document.getElementById('themeToggle');
+  const voiceCallBtn = document.getElementById('voiceCallBtn');
+  const voiceInputBtn = document.getElementById('voiceInputBtn');
+  const voiceCallOverlay = document.getElementById('voiceCallOverlay');
+  const endCallBtn = document.getElementById('endCallBtn');
+  const historyList = document.getElementById('historyList');
+  const hotAnswers = document.querySelectorAll('.btn-suggestion');
+
+  let uploadedFiles = [];
+  let isCallActive = false;
+  let recognition = null;
+
+  // Initialize Speech Recognition (Voice Input)
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+recognition = new SpeechRecognition();
+recognition.continuous = false;
+recognition.interimResults = true;
+recognition.lang = 'en-US';
+
+recognition.onresult = (e) => {
+  userInput.value = Array.from(e.results).map(r => r[0].transcript).join(' ');
+  userInput.dispatchEvent(new Event('input')); // Trigger auto-resize if implemented
+};
+recognition.onend = () => voiceInputBtn.classList.remove('text-danger');
+recognition.onerror = (e) => console.warn('Voice input error:', e.error);
+  }
+
+  // Theme Toggle
+  themeToggle.addEventListener('click', () => {
+const html = document.documentElement;
+const isDark = html.getAttribute('data-bs-theme') === 'dark';
+html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
+themeToggle.innerHTML = isDark ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-stars-fill"></i>';
+  });
+
+  // Voice Input Toggle
+  voiceInputBtn.addEventListener('click', () => {
+if (!recognition) return alert('Voice input not supported in this browser.');
+if (isCallActive) return alert('End voice call first.');
+recognition.state === 'inactive' ? (recognition.start(), voiceInputBtn.classList.add('text-danger')) : recognition.stop();
+  });
+
+  // File Upload & Preview
+  fileUpload.addEventListener('change', (e) => {
+uploadedFiles = Array.from(e.target.files);
+attachmentPreview.innerHTML = '';
+uploadedFiles.forEach((file, idx) => {
+  const chip = document.createElement('div');
+  chip.className = 'attachment-chip';
+  const icon = file.type.startsWith('image/') ? `<img src="${URL.createObjectURL(file)}" alt="${file.name}">` : `<i class="bi bi-file-earmark-${file.name.split('.').pop()}"></i>`;
+  chip.innerHTML = `${icon} <span>${file.name}</span> <i class="bi bi-x" data-idx="${idx}"></i>`;
+  attachmentPreview.appendChild(chip);
+});
+uploadedFiles.length > 0 ? attachmentPreview.classList.remove('d-none') : attachmentPreview.classList.add('d-none');
+  });
+
+  attachmentPreview.addEventListener('click', (e) => {
+if (e.target.classList.contains('bi-x')) {
+  const idx = parseInt(e.target.dataset.idx);
+  uploadedFiles.splice(idx, 1);
+  const dt = new DataTransfer();
+  uploadedFiles.forEach(f => dt.items.add(f));
+  fileUpload.files = dt.files;
+  fileUpload.dispatchEvent(new Event('change'));
+}
+  });
+
+  // Send Message
+  const sendMessage = async (text = null) => {
+const messageText = text || userInput.value.trim();
+const isSystem = systemMsgToggle.checked;
+if (!messageText && uploadedFiles.length === 0) return;
+
+addMessage('user', messageText, uploadedFiles.length);
+addToHistory('user', messageText, uploadedFiles.length > 0 ? '📎' : '👤');
+
+userInput.value = '';
+uploadedFiles = [];
+fileUpload.value = '';
+attachmentPreview.innerHTML = '';
+attachmentPreview.classList.add('d-none');
+
+showTyping();
+try {
+  // 🔌 BACKEND INTEGRATION POINT
+  // const res = await fetch('/api/chat', {
+  //   method: 'POST',
+  //   headers: { 'Content-Type': 'application/json' },
+  //   body: JSON.stringify({ message: messageText, isSystem, model: document.getElementById('modelSelector').value, files: [] }) // Handle files via FormData in production
+  // });
+  // const data = await res.json();
+
+  // Simulated AI Response
+  setTimeout(() => {
+removeTyping();
+const mockResponse = `Here's a sample integration:\n\`\`\`python\nimport requests\nres = requests.get("https://api.fareed.ai/v1/query", params={"q": "${messageText}"})\nprint(res.json())\n\`\`\`\nRun it with:\n\`\`\`terminal\npython main.py\n\`\`\`\nLet me know if you need adjustments!`;
+addMessage('ai', mockResponse);
+addToHistory('ai', mockResponse, '🤖');
+
+// Simulate Tool Call/Response
+if (Math.random() > 0.5) {
+  addToHistory('tool', `tool_call: search_db("${messageText}")`, '🛠️');
+  setTimeout(() => addToHistory('response', `{"status": "ok", "data": ["result1", "result2"]}`, '📦'), 500);
+}
+  }, 1200);
+} catch (err) {
+  removeTyping();
+  addMessage('system', '⚠️ Failed to reach Fareed backend.');
+}
+  };
+
+  sendBtn.addEventListener('click', () => sendMessage());
+  userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+
+  // Hot Answers
+  hotAnswers.forEach(btn => btn.addEventListener('click', () => sendMessage(btn.dataset.query)));
+
+  // Voice Call UI
+  voiceCallBtn.addEventListener('click', () => {
+isCallActive = true;
+userInput.disabled = true;
+userInput.placeholder = 'Voice call active...';
+voiceCallOverlay.classList.remove('d-none');
+setTimeout(() => document.getElementById('callStatusText').textContent = '🔊 Connected to Fareed', 1500);
+  });
+
+  endCallBtn.addEventListener('click', () => {
+isCallActive = false;
+userInput.disabled = false;
+userInput.placeholder = 'Type your message...';
+voiceCallOverlay.classList.add('d-none');
+// 🔌 BACKEND: Send call termination signal
+  });
+
+  // UI Helpers
+  function addMessage(role, text, fileCount = 0) {
+const div = document.createElement('div');
+div.className = `message ${role}-message`;
+const icon = role === 'user' ? '👤 You' : role === 'system' ? '⚙️ System' : '🤖 Fareed';
+let content = formatMessage(text);
+if (fileCount > 0) content += `<br><span class="opacity-75 fs-sm"><i class="bi bi-paperclip"></i> ${fileCount} file(s)</span>`;
+div.innerHTML = `<div class="message-header">${icon}</div><div class="message-content">${content}</div>`;
+chatMessages.appendChild(div);
+chatMessages.scrollTop = chatMessages.scrollHeight;
+highlightCodeBlocks(div);
+  }
+
+  function formatMessage(text) {
+return text
+  .replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+const id = 'code-' + Math.random().toString(36).substr(2, 6);
+return `<div class="code-wrapper"><pre class="code-block" id="${id}"><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre><div class="code-actions"><button onclick="copyToClipboard('${id}')"><i class="bi bi-clipboard"></i> Copy</button></div></div>`;
+  })
+  .replace(/```terminal\n([\s\S]*?)```/g, (_, cmd) => {
+const id = 'term-' + Math.random().toString(36).substr(2, 6);
+return `<div class="terminal-box" id="${id}"><div class="mb-1">$ ${escapeHtml(cmd.trim())}</div><div class="terminal-actions"><button onclick="copyToClipboard('${id}')"><i class="bi bi-clipboard"></i> Copy</button><button onclick="handleTerminal('${id}','accept')">✅ Accept</button><button onclick="handleTerminal('${id}','decline')">❌ Decline</button></div></div>`;
+  })
+  .replace(/\n/g, '<br>');
+  }
+
+  function escapeHtml(unsafe) { return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  window.copyToClipboard = (id) => {
+const el = document.getElementById(id);
+if (!el) return;
+const text = el.querySelector('code') ? el.querySelector('code').textContent : el.querySelector('.mb-1')?.textContent.replace('$ ', '');
+navigator.clipboard.writeText(text || '');
+  };
+
+  window.handleTerminal = (id, action) => {
+console.log(`Terminal command ${action}: ${id}`);
+// 🔌 BACKEND: Send accept/decline payload
+const btns = document.querySelectorAll(`#${id} .terminal-actions button`);
+btns.forEach(b => b.disabled = true);
+document.querySelector(`#${id}`).insertAdjacentHTML('beforeend', `<div class="mt-2 text-success fs-sm">${action === 'accept' ? '✅ Command approved.' : '⛔ Command declined.'}</div>`);
+  };
+
+  function highlightCodeBlocks(container) {
+container.querySelectorAll('pre code').forEach(block => Prism.highlightElement(block));
+  }
+
+  function showTyping() {
+const div = document.createElement('div');
+div.id = 'typing';
+div.className = 'message ai-message';
+div.innerHTML = `<div class="message-header">🤖 Fareed</div><div class="message-content"><span class="typing-dots">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span></div>`;
+chatMessages.appendChild(div);
+chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function removeTyping() { document.getElementById('typing')?.remove(); }
+
+  function addToHistory(role, text, icon = '📝') {
+const item = document.createElement('div');
+item.className = `history-item type-${role}`;
+const shortText = text.length > 60 ? text.substring(0, 60) + '...' : text;
+item.innerHTML = `<div class="history-meta"><span>${icon} ${role.toUpperCase()}</span><span class="opacity-50">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div><div class="text-truncate">${escapeHtml(shortText)}</div>`;
+historyList.prepend(item);
+  }
+
+  // Auto-resize textarea
+  userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight > 150 ? 150 : this.scrollHeight) + 'px'; });
+});"""
+}
+]
+}

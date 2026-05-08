@@ -1,0 +1,10 @@
+#Sat Mar 14 20:46:29 EET 2026
+base.2=/home/maher/Desktop/Fareed/MyApp/app/build/intermediates/dex/debug/mergeProjectDexDebug/1/classes.dex
+path.2=1/classes.dex
+base.1=/home/maher/Desktop/Fareed/MyApp/app/build/intermediates/dex/debug/mergeProjectDexDebug/0/classes.dex
+path.1=0/classes.dex
+base.0=/home/maher/Desktop/Fareed/MyApp/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
+renamed.2=classes3.dex
+renamed.1=classes2.dex
+renamed.0=classes.dex
+path.0=classes.dex

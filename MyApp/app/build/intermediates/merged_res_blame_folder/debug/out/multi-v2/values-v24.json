@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "/home/maher/Desktop/Fareed/MyApp/app/build/intermediates/incremental/mergeDebugResources/merged.dir/values-v24/values-v24.xml",
+            "map": [
+                {
+                    "source": "/home/maher/.gradle/caches/transforms-3/92cd1a8da73d3bd1a2d74af74e533676/transformed/appcompat-1.4.2/res/values-v24/values-v24.xml",
+                    "from": {
+                        "startLines": "2,3",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,212",
+                        "endColumns": "156,134",
+                        "endOffsets": "207,342"
+                    }
+                }
+            ]
+        }
+    ]
+}
