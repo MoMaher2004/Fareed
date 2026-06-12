@@ -52,101 +52,12 @@ input_example: [{title: "conv1", id:512},{title: "conv2", id:513},{title: "conv3
 main_window: True,
 endpoints: [
 {
-description: "get settings as JSON object",
-url: "/settings",
-method: "get",
-inputs: None,
-outputs: ["settings"],
-output_examples: [
-example1: {
-settings: {
-'set1': {
-type: 'dropdown menu',
-options: [
-{
-name: 'op1',
-value: 'val1',
-is_selected: False
-},
-{
-name: 'op2',
-value: 'val2',
-is_selected: True
-}
-]
-},
-'set2': {
-type: 'checkbox',
-checked: True
-},
-'set3': {
-type: 'checklist',
-items: [
-('i1', True),
-('i2', True),
-('i3', False)
-]
-},
-'set4': {
-type: 'radio button',
-options: [
-{
-name: 'op1',
-value: 'val1',
-is_selected: False
-},
-{
-name: 'op2',
-value: 'val2',
-is_selected: True
-}
-]
-},
-'set5': {
-type: 'text',
-value: 'val',
-placeholder: 'set4 value'
-}
-}
-}
-]
-},
-{
-description: "modify settings",
-url: "/settings",
-method: "post",
-inputs: ["settings"],
-outputs: None,
-inputs_examples: [
-example1: {
-settings: {
-'set1': "op2",
-'set2': False,
-'set3': [
-('i1', False),
-('i2', True),
-('i3', False)
-],
-'set4': 'op1',
-'set5': 'val'
-}
-}
-]
-},
-{
 description: "speech to text for voice typing in message field",
 url: "/stt",
 method: "get",
 inputs: [],
 files: ["audio"],
 outputs: ["text"]
-},
-{
-description: "voice call which will send and recieve stream of audio between user and backend",
-url: "/call",
-method: "websocket",
-inputs: ["audio"],
-outputs: ["audio"]
 },
 {
 description: "retrieve conversation by its id",
@@ -163,10 +74,34 @@ inputs: [],
 outputs: ["conversations"]
 },
 {
-description: "sending messages from ui and recieving responses as chuncks stream from backend",
+description: "open websocket for chatting",
 url: "/chat",
-method: "websocket",
-inputs: ["text", "files"],
+method: "websocket:connect",
+inputs: [],
+outputs: [],
+output_examples: []
+},
+{
+description: "close websocket of chatting",
+url: "/chat",
+method: "websocket:disconnect",
+inputs: [],
+outputs: [],
+output_examples: []
+},
+{
+description: "join chatting room",
+url: "/chat",
+method: "websocket:join_chat",
+inputs: ["chat_id"],
+outputs: [],
+output_examples: []
+},
+{
+description: "send message",
+url: "/chat",
+method: "websocket:send_message",
+inputs: ["chat_id", "text", "files"],
 outputs: ["response"],
 output_examples: [
 example1: {

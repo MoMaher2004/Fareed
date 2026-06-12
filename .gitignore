@@ -4,3 +4,5 @@ node_modules/
 *.log
 .DS_Store
 agent/.env
+agent/app.db-shm
+agent/app.db-wal

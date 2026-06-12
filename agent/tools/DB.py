@@ -12,7 +12,7 @@ class DB:
         DB.cursor.execute(f"""CREATE TABLE IF NOT EXISTS {tbl} ({', '.join(columns)})""")
         DB.conn.commit()
 
-    def add(tbl: str, row: dict):
+    def add(tbl: str, row: dict) -> int:
         DB.cursor.execute(f"""INSERT INTO {tbl}
             ({', '.join([k for k, v in row.items()])})
             VALUES
@@ -23,7 +23,7 @@ class DB:
         DB.conn.commit()
         return i
 
-    def get(tbl: str, where: list[tuple]):
+    def get(tbl: str, where: list[tuple] = []) -> list:
         conditions = []
         values = []
         w_stmt = ''

@@ -1,0 +1,124 @@
+erDiagram
+
+CHAT ||--o{ MESSAGE : contains
+CHAT ||--o{ MEMORY : stores
+CHAT ||--o{ CHAT_FEEDBACK : generates
+
+MESSAGE ||--o{ TOOL_CALL : triggers
+
+TOOL_CALL ||--|| TOOL_RESULT : returns
+TOOL_CALL ||--o{ TOOL_CALL_FEEDBACK : generates
+
+TOOL ||--o{ TOOL_INSTRUCTION : has
+TOOL ||--o{ TOOL_CALL : has
+TOOL ||--o{ TOOL_EXAMPLE : has
+
+TOOL_INSTRUCTION ||--o{ TOOL_INSTRUCTION_HISTORY : tracks
+
+CHAT {
+    int id PK
+    string title
+    text summary
+    datetime created_at
+    datetime updated_at
+}
+
+MESSAGE {
+    int id PK
+    int chat_id FK
+    string role "user/assistant/system/tool"
+    text content
+    datetime created_at
+}
+
+TOOL_CALL {
+    int id PK
+    int message_id FK
+    int tool_id FK
+    json input_payload
+    datetime created_at
+}
+
+TOOL_RESULT {
+    int id PK
+    int tool_call_id FK
+    json output_payload
+    text summarized_result
+    datetime created_at
+}
+
+MEMORY {
+    int id PK
+    int chat_id FK
+    string type "short_term/long_term/semantic"
+    datetime created_at
+    string title
+    text content
+}
+
+CRON_JOB {
+    int id PK
+    datetime start_time
+    datetime next_runtime
+    datetime last_runtime
+    datetime dead_time
+    string importance "low/medium/high/critical"
+    string title
+    text prompt
+    text on_pass_action
+    boolean is_done
+    datetime created_at
+}
+
+CHAT_FEEDBACK {
+    int id PK
+    int chat_id FK
+    string type "user/tool/agent"
+    text issue_description
+    text expected_behavior
+    text actual_behavior
+    datetime created_at
+}
+
+TOOL_CALL_FEEDBACK {
+    int id PK
+    int tool_call_id FK
+    string type "user/tool/agent"
+    text issue_description
+    text expected_behavior
+    datetime created_at
+}
+ 
+TOOL {
+    int id PK
+    string name
+    string category
+    string description
+    json input_schema
+    boolean is_active
+}
+
+TOOL_EXAMPLE {
+    int id PK
+    int tool_id FK
+    text input_text
+    json input_params
+    text expected_output
+}
+
+TOOL_INSTRUCTION {
+    int id PK
+    int tool_id FK
+    text prompt
+    text notes
+}
+
+TOOL_INSTRUCTION_HISTORY {
+    int id PK
+    int tool_instruction_id FK
+    text old_prompt
+    text new_prompt
+    string updated_by "agent/user/system"
+    boolean is_applied
+    datetime created_at
+}

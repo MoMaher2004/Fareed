@@ -10,996 +10,109 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <!-- Prism.js (Syntax Highlighting) -->
   <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-primary: #080b12;
-      --bg-secondary: #102E4A;
-      --bg-card: rgba(16, 46, 74, 0.6);
-      --text-primary: #e0e7ff;
-      --text-secondary: #94a3b8;
-      --accent-blue: #55C1FF;
-      --accent-purple: #A682FF;
-      --accent-indigo: #5887FF;
-      --accent-deep: #715AFF;
-      --border-color: rgba(85, 193, 255, 0.15);
-      --glow: 0 0 12px rgba(85, 193, 255, 0.4);
-      --glass: rgba(255, 255, 255, 0.05);
-    }
-
-    [data-bs-theme="light"] {
-      --bg-primary: #f8fafc;
-      --bg-secondary: #e2e8f0;
-      --bg-card: rgba(255, 255, 255, 0.9);
-      --text-primary: #0f172a;
-      --text-secondary: #475569;
-      --accent-blue: #3b82f6;
-      --accent-purple: #8b5cf6;
-      --accent-indigo: #4f46e5;
-      --accent-deep: #6366f1;
-      --border-color: rgba(0, 0, 0, 0.12);
-      --glow: 0 0 10px rgba(59, 130, 246, 0.2);
-      --glass: rgba(0, 0, 0, 0.03);
-    }
-
-    * { box-sizing: border-box; transition: background 0.25s, color 0.25s, border-color 0.25s, box-shadow 0.25s; }
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      height: 100vh;
-      overflow: hidden;
-      background-image: 
-        radial-gradient(circle at 10% 20%, rgba(85, 193, 255, 0.06) 0%, transparent 25%),
-        radial-gradient(circle at 90% 80%, rgba(113, 90, 255, 0.06) 0%, transparent 25%);
-    }
-
-    .futuristic-navbar {
-      background: var(--bg-card);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-color);
-      height: 64px;
-    }
-    .navbar-brand { color: var(--accent-blue) !important; font-weight: 700; text-shadow: var(--glow); font-size: 1.25rem; }
-    .futuristic-select, .form-select {
-      background: var(--glass); border: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem; padding: 0.3rem 2rem 0.3rem 0.6rem;
-    }
-    .futuristic-select option { background: var(--bg-secondary); color: var(--text-primary); }
-    .btn-outline-future { border-color: var(--border-color); color: var(--accent-blue); background: transparent; font-size: 0.9rem; }
-    .btn-outline-future:hover { background: var(--glass); color: var(--accent-indigo); box-shadow: var(--glow); }
-
-    .main-layout { height: calc(100vh - 64px); display: flex; }
-    .left-drawer { width: 280px; background: var(--bg-card); border-right: 1px solid var(--border-color); overflow-y: auto; display: none; }
-    .left-drawer.show { display: block; }
-    .left-drawer-header { padding: 1rem; border-bottom: 1px solid var(--border-color); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-    .conv-item { padding: 0.8rem 1rem; border-bottom: 1px solid var(--border-color); cursor: pointer; font-size: 0.85rem; color: var(--text-secondary); }
-    .conv-item:hover, .conv-item.active { background: var(--glass); color: var(--accent-blue); border-left: 3px solid var(--accent-blue); }
-    .conv-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-    .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
-    .chat-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
-    .chat-messages::-webkit-scrollbar { width: 6px; }
-    .chat-messages::-webkit-scrollbar-thumb { background: var(--accent-deep); border-radius: 3px; }
-
-    .message { max-width: 85%; padding: 0.9rem 1.2rem; border-radius: 16px; position: relative; line-height: 1.6; word-break: break-word; animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .user-message { align-self: flex-end; background: linear-gradient(135deg, var(--accent-indigo), var(--accent-deep)); color: #fff; border-bottom-right-radius: 4px; }
-    .ai-message { align-self: flex-start; background: var(--bg-card); border: 1px solid var(--border-color); border-bottom-left-radius: 4px; backdrop-filter: blur(8px); }
-    .system-message { align-self: center; background: rgba(245, 158, 11, 0.12); color: #fbbf24; font-size: 0.85rem; border: 1px dashed rgba(245, 158, 11, 0.4); text-align: center; max-width: 90%; padding: 0.5rem 1rem; border-radius: 8px; }
-    .message-header { font-size: 0.7rem; font-weight: 600; margin-bottom: 0.4rem; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
-    .message-content { font-size: 0.95rem; }
-
-    /* Code Blocks */
-    .code-wrapper { position: relative; margin: 0.8rem 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--border-color); background: #1e1e1e !important; }
-    .code-header { background: #252526; padding: 0.4rem 0.8rem; font-size: 0.75rem; color: #ccc; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
-    pre.code-block { margin: 0 !important; background: transparent !important; padding: 1rem 0.5rem 1rem 3.5rem !important; max-height: 450px; overflow: auto; font-size: 0.88rem; counter-reset: line; font-family: 'Fira Code', monospace !important; }
-    pre.code-block code { background: transparent !important; display: block; }
-    pre.code-block code::before { counter-increment: line; content: counter(line); display: inline-block; width: 2.2rem; margin-left: -3.5rem; text-align: right; color: #6e7681; border-right: 1px solid #333; padding-right: 0.8rem; }
-    .code-actions button { background: rgba(255,255,255,0.1); border: none; color: #ccc; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
-    .code-actions button:hover { background: var(--accent-indigo); color: #fff; }
-
-    /* Terminal Box */
-    .terminal-box { background: #0b121c; color: #10b981; font-family: 'Fira Code', monospace; padding: 1rem; border-radius: 10px; margin: 0.5rem 0; border: 1px solid #1f2937; border-left: 4px solid var(--accent-blue); }
-    .terminal-actions { display: flex; gap: 0.6rem; margin-top: 0.8rem; padding-top: 0.5rem; border-top: 1px dashed #334155; }
-    .terminal-actions button { font-size: 0.8rem; padding: 5px 12px; border-radius: 5px; border: 1px solid #334155; background: #0f172a; color: #cbd5e1; cursor: pointer; }
-    .terminal-actions button:hover { background: #1e293b; color: #fff; }
-    .terminal-actions button.accept:hover { background: #059669; border-color: #059669; }
-    .terminal-actions button.decline:hover { background: #dc2626; border-color: #dc2626; }
-
-    .hot-answers { display: flex; gap: 0.6rem; overflow-x: auto; padding: 0.4rem 1rem; margin-bottom: 0.5rem; scrollbar-width: none; background: transparent; }
-    .hot-answers::-webkit-scrollbar { display: none; }
-    .btn-suggestion { background: var(--glass); border: 1px solid var(--border-color); color: var(--text-secondary); white-space: nowrap; font-size: 0.82rem; padding: 0.45rem 0.9rem; border-radius: 20px; transition: 0.2s; cursor: pointer; }
-    .btn-suggestion:hover { border-color: var(--accent-purple); color: var(--accent-purple); background: rgba(166, 130, 255, 0.15); transform: translateY(-2px); }
-
-    .input-area { background: var(--bg-card); backdrop-filter: blur(12px); border-top: 1px solid var(--border-color); padding: 0.8rem 1rem; }
-    .input-wrapper { display: flex; align-items: flex-end; background: var(--glass); border: 1px solid var(--border-color); border-radius: 14px; padding: 0.5rem; gap: 0.5rem; }
-    .futuristic-textarea { background: transparent; border: none; color: var(--text-primary); resize: none; outline: none; padding: 0.6rem 0.5rem; flex: 1; font-size: 0.95rem; min-height: 28px; max-height: 150px; line-height: 1.5; }
-    .futuristic-textarea::placeholder { color: var(--text-secondary); opacity: 0.6; }
-    .input-actions { display: flex; align-items: center; gap: 0.6rem; }
-    .action-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 0.5rem; border-radius: 50%; transition: 0.2s; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
-    .action-btn:hover { color: var(--accent-blue); background: rgba(255,255,255,0.08); }
-    .action-btn.recording { color: #ef4444; animation: pulse-red 1s infinite; }
-    @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
-    .futuristic-switch { border-color: var(--accent-deep); cursor: pointer; }
-    .futuristic-switch:checked { background-color: var(--accent-purple); border-color: var(--accent-purple); }
-    .btn-send { background: linear-gradient(135deg, var(--accent-indigo), var(--accent-deep)); border: none; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; transition: 0.2s; font-size: 1rem; }
-    .btn-send:hover:not(:disabled) { transform: scale(1.05); box-shadow: var(--glow); }
-    .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .attachment-preview { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; padding: 0 0.5rem; }
-    .attachment-chip { background: var(--glass); border: 1px solid var(--border-color); padding: 4px 8px 4px 4px; border-radius: 8px; font-size: 0.78rem; display: flex; align-items: center; gap: 0.4rem; color: var(--text-secondary); }
-    .attachment-chip i { cursor: pointer; transition: 0.2s; }
-    .attachment-chip i:hover { color: #ef4444; }
-    .attachment-chip img { width: 30px; height: 30px; object-fit: cover; border-radius: 4px; }
-
-    /* Right Drawer */
-    .offcanvas { background: var(--bg-card) !important; color: var(--text-primary) !important; border-left: 1px solid var(--border-color) !important; backdrop-filter: blur(16px); width: 340px; }
-    .offcanvas-header { border-bottom: 1px solid var(--border-color); }
-    .history-card { background: var(--glass); border: 1px solid var(--border-color); border-radius: 10px; padding: 0.8rem; margin-bottom: 0.6rem; cursor: pointer; transition: 0.2s; }
-    .history-card:hover { border-color: var(--accent-indigo); transform: translateY(-2px); box-shadow: var(--glow); }
-    .history-card-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px; }
-    .type-ai { color: var(--accent-purple); }
-    .type-user { color: var(--accent-blue); }
-    .type-tool { color: #f59e0b; }
-    .type-response { color: #10b981; }
-    .type-system { color: #ef4444; }
-    .history-preview { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; max-height: 2.8em; overflow: hidden; position: relative; }
-    .history-preview.expanded { max-height: none; }
-    .history-preview.expanded::after { display: none; }
-    .history-preview:not(.expanded)::after { content: '...'; position: absolute; bottom: 0; right: 0; background: var(--glass); padding-left: 4px; }
-    .expand-icon { font-size: 0.7rem; transition: 0.2s; }
-    .expand-icon.rotated { transform: rotate(180deg); }
-
-    /* Voice Call Overlay */
-    .voice-call-overlay { position: fixed; inset: 0; background: rgba(8, 11, 18, 0.92); backdrop-filter: blur(20px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2000; }
-    .call-visualizer { width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, var(--accent-indigo) 0%, transparent 70%); opacity: 0.3; animation: pulse-anim 2s infinite; margin-bottom: 2rem; }
-    @keyframes pulse-anim { 0% { transform: scale(0.95); opacity: 0.3; } 50% { transform: scale(1.05); opacity: 0.5; } 100% { transform: scale(0.95); opacity: 0.3; } }
-    .end-call-btn { background: linear-gradient(135deg, #ef4444, #dc2626); border: none; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; cursor: pointer; transition: 0.2s; }
-    .end-call-btn:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
-
-    /* Settings Modal */
-    .settings-group { margin-bottom: 1.2rem; }
-    .settings-label { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.4rem; display: block; }
-    .checklist-item { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; cursor: pointer; }
-
-    .text-xs { font-size: 0.7rem; color: var(--text-secondary); margin-left: 4px; }
-    .d-none { display: none !important; }
-    .typing-dots { display: inline-block; }
-    .typing-dots .dot { animation: blink 1.4s infinite both; font-size: 1.2rem; line-height: 0.8; }
-    .typing-dots .dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dots .dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
-
-    @media (max-width: 992px) { 
-      .left-drawer { position: fixed; z-index: 1040; height: calc(100vh - 64px); top: 64px; left: 0; box-shadow: var(--glow); } 
-      .left-drawer.show { transform: translateX(0); }
-      .chat-container { padding: 0.5rem; } 
-      .message { max-width: 95%; } 
-    }
-  </style>
+  <link rel="stylesheet" href="code-viewer.css">
+  <link rel="stylesheet" href="audio-player.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-python.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
   <!-- Top Navbar -->
   <nav class="navbar futuristic-navbar">
     <div class="container-fluid px-3">
-      <div class="d-flex align-items-center gap-3">
-        <button class="btn btn-sm btn-outline-future" id="toggleLeftDrawer" title="Conversation Histories"><i class="bi bi-layout-sidebar"></i></button>
-        <a class="navbar-brand d-flex align-items-center" href="#"><i class="bi bi-stars me-2"></i> Fareed</a>
-      </div>
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <i class="bi bi-stars me-2"></i> Fareed
+      </a>
       <div class="d-flex align-items-center gap-2 gap-md-3">
-        <select class="form-select form-select-sm futuristic-select" id="modelSelector" style="width: auto;">
-          <option value="fareed-pro">Fareed Pro</option>
-          <option value="fareed-fast">Fareed Fast</option>
-          <option value="fareed-code">Fareed Code</option>
-        </select>
-        <button class="btn btn-sm btn-outline-future" id="voiceCallBtn" title="Start Voice Call"><i class="bi bi-telephone"></i></button>
-        <button class="btn btn-sm btn-outline-future" id="settingsBtn" title="Settings"><i class="bi bi-gear"></i></button>
-        <button class="btn btn-sm btn-outline-future" id="themeToggle" title="Toggle Theme"><i class="bi bi-moon-stars-fill"></i></button>
-        <button class="btn btn-sm btn-outline-future" data-bs-toggle="offcanvas" data-bs-target="#historyDrawer" title="Current History"><i class="bi bi-clock-history"></i></button>
+        <!-- Theme Toggle -->
+        <button class="btn btn-sm btn-outline-future" id="themeToggle" title="Toggle Theme">
+          <i class="bi bi-moon-stars-fill"></i>
+        </button>
+        <!-- Left Drawer: chats List -->
+        <button class="btn btn-sm btn-outline-future" data-bs-toggle="offcanvas" data-bs-target="#chatsDrawer" title="All chats">
+          <i class="bi bi-chat-left-text"></i>
+        </button>
+        <!-- Right Drawer: Current Chat History -->
+        <button class="btn btn-sm btn-outline-future" data-bs-toggle="offcanvas" data-bs-target="#historyDrawer" title="Message History">
+          <i class="bi bi-clock-history"></i>
+        </button>
       </div>
     </div>
   </nav>
 
-  <div class="main-layout">
-    <!-- Left Drawer: Conversation Histories -->
-    <div class="left-drawer" id="leftDrawer">
-      <div class="left-drawer-header">Conversations <button class="btn btn-sm btn-outline-future" id="refreshConvBtn"><i class="bi bi-arrow-clockwise"></i></button></div>
-      <div id="convList"></div>
+  <!-- Main Chat Window -->
+  <main class="chat-container">
+    <div id="chatMessages" class="chat-messages">
+      <div class="message ai-message">
+        <div class="message-header"><i class="bi bi-robot me-1"></i> Fareed</div>
+        <div class="message-content">Hello! I'm Fareed. How can I assist you today?</div>
+      </div>
     </div>
 
-    <!-- Main Chat Area -->
-    <main class="chat-area">
-      <div id="chatMessages" class="chat-messages">
-        <div class="message ai-message">
-          <div class="message-header"><i class="bi bi-robot me-1"></i> Fareed</div>
-          <div class="message-content">Hello, Mohamed! I'm Fareed. How can I assist you today?</div>
-        </div>
-      </div>
+    <!-- Hot Answers / Suggestions (optional) -->
+    <div id="hotAnswers" class="hot-answers"></div>
 
-      <!-- Hot Answers / Suggestions -->
-      <div id="hotAnswers" class="hot-answers"></div>
-
-      <!-- Input Area -->
-      <div class="input-area">
-        <div id="attachmentPreview" class="attachment-preview d-none"></div>
-        <div class="input-wrapper">
-          <textarea id="userInput" class="form-control futuristic-textarea" placeholder="Type your message..." rows="1"></textarea>
-          <div class="input-actions">
-            <label for="fileUpload" class="action-btn" title="Upload Files">
-              <i class="bi bi-paperclip"></i>
-              <input type="file" id="fileUpload" class="d-none" multiple accept="image/*,.pdf,.txt,.py,.html,.css,.js,.md">
-            </label>
-            <button class="action-btn" id="voiceInputBtn" title="Voice to Text"><i class="bi bi-mic"></i></button>
-            <div class="form-check form-switch ms-1 align-self-center" title="Send as System Message">
-              <input class="form-check-input futuristic-switch" type="checkbox" id="systemMsgToggle">
-              <label class="form-check-label text-xs" for="systemMsgToggle">SYS</label>
-            </div>
-            <button id="sendBtn" class="btn btn-send futuristic-btn" disabled><i class="bi bi-send-fill"></i></button>
+    <!-- Input Area with Drag & Drop -->
+    <div class="input-area" id="dropZone">
+      <div id="attachmentPreview" class="attachment-preview d-none"></div>
+      <div class="input-wrapper">
+        <textarea id="userInput" class="form-control futuristic-textarea" placeholder="Type your message..." rows="1"></textarea>
+        <div class="input-actions">
+          <label for="fileUpload" class="action-btn" title="Upload Files">
+            <i class="bi bi-paperclip"></i>
+            <input type="file" id="fileUpload" class="d-none" multiple accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.py,.html,.css,.js,.json,.mp3,.wav,.mp4">
+          </label>
+          <button class="action-btn" id="voiceInputBtn" title="Voice Input">
+            <i class="bi bi-mic"></i>
+          </button>
+          <div class="form-check form-switch ms-1 align-self-center" title="Send as System Message">
+            <input class="form-check-input futuristic-switch" type="checkbox" id="systemMsgToggle">
+            <label class="form-check-label text-xs" for="systemMsgToggle">SYS</label>
           </div>
+          <button id="sendBtn" class="btn btn-send futuristic-btn">
+            <i class="bi bi-send-fill"></i>
+          </button>
         </div>
       </div>
-    </main>
+      <div class="drop-hint text-center text-muted small py-2">📁 Drop files here to attach</div>
+    </div>
+  </main>
 
-    <!-- Right History Drawer -->
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="historyDrawer">
-      <div class="offcanvas-header futuristic-header">
-        <h5 class="offcanvas-title"><i class="bi bi-journal-text me-2"></i>History</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-      </div>
-      <div class="offcanvas-body p-3" id="historyList"></div>
+  <!-- Left Drawer: chats List -->
+  <div class="offcanvas offcanvas-start" tabindex="-1" id="chatsDrawer">
+    <div class="offcanvas-header futuristic-header">
+      <h5 class="offcanvas-title"><i class="bi bi-chat-square-text me-2"></i>chats</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-0" id="chatsList">
+      <!-- Dynamic chat cards -->
+    </div>
+    <div class="offcanvas-footer p-3 border-top border-secondary">
+      <button class="btn btn-outline-future w-100" id="newchatBtn">
+        <i class="bi bi-plus-lg me-2"></i>New chat
+      </button>
     </div>
   </div>
 
-  <!-- Voice Call Overlay -->
-  <div id="voiceCallOverlay" class="voice-call-overlay d-none">
-    <div class="call-visualizer"></div>
-    <h4 class="mt-3 text-white">Voice Call Active</h4>
-    <p id="callStatusText" class="text-white opacity-75 mb-4">Connecting to Fareed...</p>
-    <button id="endCallBtn" class="end-call-btn"><i class="bi bi-telephone-x-fill"></i></button>
-  </div>
-
-  <!-- Settings Modal -->
-  <div class="modal fade" id="settingsModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary);">
-        <div class="modal-header border-secondary">
-          <h5 class="modal-title"><i class="bi bi-gear me-2"></i>Settings</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body" id="settingsForm"></div>
-        <div class="modal-footer border-secondary">
-          <button type="button" class="btn btn-sm btn-outline-future" data-bs-dismiss="modal">Close</button>
-        </div>
-      </div>
+  <!-- Right Drawer: Current Chat History -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="historyDrawer">
+    <div class="offcanvas-header futuristic-header">
+      <h5 class="offcanvas-title"><i class="bi bi-journal-text me-2"></i>Message History</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
-  </div>
-
-  <!-- Image/PDF Viewer Modal -->
-  <div class="modal fade" id="mediaViewerModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content" style="background: transparent; border: none;">
-        <div class="modal-body p-0 text-center position-relative">
-          <button type="button" class="btn-close bg-white position-absolute top-0 end-0 m-3" data-bs-dismiss="modal"></button>
-          <div id="mediaContent" class="p-2"></div>
-        </div>
-      </div>
+    <div class="offcanvas-body p-0" id="historyList">
+      <!-- Dynamic history items -->
     </div>
   </div>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-html.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-css.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  
-  <script>
-    /**
-     * BASE_URL Constant - Change this to your backend server address
-     */
-    const BASE_URL = 'http://localhost:8000'; 
-
-    document.addEventListener('DOMContentLoaded', () => {
-      // DOM Elements
-      const chatMessages = document.getElementById('chatMessages');
-      const userInput = document.getElementById('userInput');
-      const sendBtn = document.getElementById('sendBtn');
-      const fileUpload = document.getElementById('fileUpload');
-      const attachmentPreview = document.getElementById('attachmentPreview');
-      const systemMsgToggle = document.getElementById('systemMsgToggle');
-      const themeToggle = document.getElementById('themeToggle');
-      const voiceCallBtn = document.getElementById('voiceCallBtn');
-      const voiceInputBtn = document.getElementById('voiceInputBtn');
-      const voiceCallOverlay = document.getElementById('voiceCallOverlay');
-      const endCallBtn = document.getElementById('endCallBtn');
-      const callStatusText = document.getElementById('callStatusText');
-      const historyList = document.getElementById('historyList');
-      const hotAnswersContainer = document.getElementById('hotAnswers');
-      const leftDrawer = document.getElementById('leftDrawer');
-      const toggleLeftDrawer = document.getElementById('toggleLeftDrawer');
-      const convList = document.getElementById('convList');
-      const refreshConvBtn = document.getElementById('refreshConvBtn');
-      const settingsBtn = document.getElementById('settingsBtn');
-      const settingsForm = document.getElementById('settingsForm');
-      const settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
-      const mediaViewerModal = new bootstrap.Modal(document.getElementById('mediaViewerModal'));
-      const mediaContent = document.getElementById('mediaContent');
-
-      // State
-      let uploadedFiles = [];
-      let isCallActive = false;
-      let voiceWs = null;
-      let mediaRecorder = null;
-      let audioContext = null;
-      let stream = null;
-      let recognition = null;
-      let isRecording = false;
-      let currentChatWs = null;
-      let isStreaming = false;
-      let currentSettings = {};
-
-      // --- Initialization ---
-      loadSettings();
-      loadConversations();
-
-      // --- Event Listeners ---
-      themeToggle.addEventListener('click', () => {
-        const html = document.documentElement;
-        const isDark = html.getAttribute('data-bs-theme') === 'dark';
-        html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
-        themeToggle.innerHTML = isDark ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-stars-fill"></i>';
-      });
-
-      toggleLeftDrawer.addEventListener('click', () => leftDrawer.classList.toggle('show'));
-      refreshConvBtn.addEventListener('click', loadConversations);
-      settingsBtn.addEventListener('click', () => settingsModal.show());
-
-      // File Upload
-      fileUpload.addEventListener('change', handleFileSelect);
-      
-      // Drag and Drop
-      document.body.addEventListener('dragover', e => { e.preventDefault(); });
-      document.body.addEventListener('drop', e => {
-        e.preventDefault();
-        if (e.dataTransfer.files.length) {
-          uploadedFiles = Array.from(e.dataTransfer.files);
-          updateAttachmentPreview();
-        }
-      });
-
-      attachmentPreview.addEventListener('click', e => {
-        if (e.target.classList.contains('bi-x')) {
-          const idx = parseInt(e.target.dataset.idx);
-          uploadedFiles.splice(idx, 1);
-          updateAttachmentPreview();
-        }
-      });
-
-      // Voice Input (Browser STT)
-      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-        recognition.onresult = e => {
-          userInput.value = Array.from(e.results).map(r => r[0].transcript).join(' ');
-          userInput.dispatchEvent(new Event('input'));
-        };
-        recognition.onend = () => {
-          isRecording = false;
-          voiceInputBtn.classList.remove('recording');
-          voiceInputBtn.innerHTML = '<i class="bi bi-mic"></i>';
-          if (uploadedFiles.length > 0 || userInput.value.trim()) sendBtn.disabled = false;
-        };
-      }
-
-      voiceInputBtn.addEventListener('click', () => {
-        if (!recognition) return alert('Voice input not supported.');
-        if (isCallActive) return;
-        if (isRecording) {
-          recognition.stop();
-        } else {
-          recognition.start();
-          isRecording = true;
-          voiceInputBtn.classList.add('recording');
-          voiceInputBtn.innerHTML = '<i class="bi bi-stop-circle"></i>';
-        }
-      });
-
-      // User Input Auto-resize
-      userInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 150) + 'px';
-        sendBtn.disabled = !(this.value.trim() || uploadedFiles.length > 0) && !isStreaming;
-      });
-
-      // Send Message
-      sendBtn.addEventListener('click', sendMessage);
-      userInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
-
-      // Hot Answers
-      hotAnswersContainer.addEventListener('click', e => {
-        if (e.target.classList.contains('btn-suggestion')) {
-          userInput.value = e.target.dataset.query;
-          sendMessage();
-        }
-      });
-
-      // Voice Call
-      voiceCallBtn.addEventListener('click', startVoiceCall);
-      endCallBtn.addEventListener('click', stopVoiceCall);
-
-      // --- Core Functions ---
-
-      async function sendMessage(overrideText = null) {
-        const text = overrideText || userInput.value.trim();
-        const isSystem = systemMsgToggle.checked;
-        if (!text && uploadedFiles.length === 0) return;
-        if (isStreaming) return;
-
-        // Add user message to UI
-        addMessageToChat('user', text, uploadedFiles.length);
-        addMessageToHistory({ role: 'user', content: text });
-
-        userInput.value = '';
-        userInput.dispatchEvent(new Event('input'));
-        uploadedFiles = [];
-        updateAttachmentPreview();
-        isStreaming = true;
-        sendBtn.disabled = true;
-
-        showTyping();
-
-        // WebSocket Chat
-        currentChatWs = new WebSocket(`${BASE_URL}/chat`);
-        
-        // Prepare payload (simulated multipart/form-data or JSON + binary chunks depending on backend)
-        // For this implementation, we send a JSON structure. In production, handle FormData for files.
-        const payload = {
-          text,
-          isSystem,
-          model: document.getElementById('modelSelector').value,
-          files: uploadedFiles.map(f => ({ name: f.name, type: f.type })) // Placeholder for file handling logic
-        };
-
-        // Buffer for stream parsing
-        let buffer = '';
-        let currentType = 'TEXT';
-        let currentAttrs = {};
-        let currentContent = '';
-        let aiMessageDiv = null;
-        let contentDiv = null;
-
-        currentChatWs.onopen = () => {
-          currentChatWs.send(JSON.stringify(payload));
-          // Send files if backend supports chunked or base64 in JSON, otherwise this is a simplification.
-        };
-
-        currentChatWs.onmessage = async (event) => {
-          const chunk = event.data;
-          buffer += chunk;
-
-          let idx;
-          while ((idx = buffer.indexOf('<*&')) !== -1) {
-            let endIdx = buffer.indexOf('&*>', idx);
-            if (endIdx === -1) break; // Tag incomplete
-
-            let contentBefore = buffer.substring(0, idx);
-            let tagRaw = buffer.substring(idx, endIdx + 3);
-            buffer = buffer.substring(endIdx + 3);
-
-            // Render content before tag
-            if (contentBefore && aiMessageDiv) {
-              currentContent += contentBefore;
-              renderContentBlock(aiMessageDiv, contentDiv, currentType, currentAttrs, currentContent);
-              currentContent = '';
-            }
-
-            // Parse Tag
-            let tagContent = tagRaw.substring(3, tagRaw.length - 3);
-            if (tagContent.startsWith('END')) {
-              removeTyping();
-              isStreaming = false;
-              sendBtn.disabled = false;
-              if (currentContent.trim()) renderContentBlock(aiMessageDiv, contentDiv, currentType, currentAttrs, currentContent);
-              currentContent = '';
-              currentChatWs.close();
-              break;
-            }
-
-            let parts = tagContent.split(':');
-            let newType = parts[0];
-            let newAttrs = {};
-            if (parts.length > 1) {
-              parts.slice(1).join(':').split(':').forEach(pair => {
-                let [k, v] = pair.split('=');
-                if (k && v) newAttrs[k] = decodeURIComponent(v);
-              });
-            }
-
-            // Switch type, render previous content
-            if (currentType !== newType && currentContent.trim() && aiMessageDiv) {
-              renderContentBlock(aiMessageDiv, contentDiv, currentType, currentAttrs, currentContent);
-              currentContent = '';
-            }
-
-            currentType = newType;
-            currentAttrs = newAttrs;
-
-            if (currentType === 'HOTANSWER') {
-               // Hot answers are usually handled before content starts, or appended.
-            } else if (!aiMessageDiv) {
-               // Create AI message container
-               aiMessageDiv = document.createElement('div');
-               aiMessageDiv.className = 'message ai-message';
-               aiMessageDiv.innerHTML = `<div class="message-header"><i class="bi bi-robot me-1"></i> Fareed</div><div class="message-content"></div>`;
-               removeTyping();
-               chatMessages.appendChild(aiMessageDiv);
-               contentDiv = aiMessageDiv.querySelector('.message-content');
-            }
-
-            // Special handling for HOTANSWER, IMAGE, YOUTUBE which might be inline
-            if (currentType === 'HOTANSWER' || currentType === 'IMAGE' || currentType === 'YOUTUBE') {
-               // We wait for content inside these tags to render them immediately
-            }
-          }
-
-          // Append remaining buffer to current content
-          if (buffer && !buffer.includes('<*&')) {
-            currentContent += buffer;
-            if (aiMessageDiv) renderContentBlock(aiMessageDiv, contentDiv, currentType, currentAttrs, currentContent);
-            buffer = '';
-          }
-          
-          // Auto scroll
-          chatMessages.scrollTop = chatMessages.scrollHeight;
-        };
-
-        currentChatWs.onerror = err => {
-          console.error(err);
-          removeTyping();
-          addMessageToChat('system', '⚠️ Connection error with Fareed.');
-          isStreaming = false;
-          sendBtn.disabled = false;
-        };
-      }
-
-      // Stream Parser Renderer
-      function renderContentBlock(msgDiv, contentDiv, type, attrs, content) {
-        switch(type) {
-          case 'TEXT':
-            contentDiv.innerHTML += formatText(content);
-            content = '';
-            break;
-          case 'CODE':
-            contentDiv.innerHTML += createCodeBlock(attrs.filename || 'snippet', attrs.lang || 'plaintext', content);
-            content = '';
-            break;
-          case 'COMMAND':
-            contentDiv.innerHTML += createTerminalBlock(content);
-            content = '';
-            break;
-          case 'HTML':
-            contentDiv.innerHTML += content;
-            content = '';
-            break;
-          case 'IMAGE':
-            // Image URL is in content
-            const imgHtml = `<div class="my-2"><img src="${content.trim()}" class="img-fluid rounded border border-secondary cursor-pointer" onclick="viewMedia('image', '${content.trim()}')" style="max-height:300px;"></div>`;
-            contentDiv.innerHTML += imgHtml;
-            content = '';
-            break;
-          case 'PDF':
-            contentDiv.innerHTML += `<div class="my-2"><a href="${content.trim()}" class="btn btn-sm btn-outline-future" onclick="viewMedia('pdf', '${content.trim()}')"><i class="bi bi-file-earmark-pdf me-1"></i> Open PDF</a></div>`;
-            content = '';
-            break;
-          case 'AUDIO':
-            contentDiv.innerHTML += `<div class="my-2"><audio controls src="${content.trim()}" class="w-100"></audio></div>`;
-            content = '';
-            break;
-          case 'YOUTUBE':
-            const videoId = extractYoutubeId(content.trim());
-            contentDiv.innerHTML += `<div class="my-2 ratio ratio-16x9 rounded overflow-hidden border border-secondary"><iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen></iframe></div>`;
-            content = '';
-            break;
-          case 'HOTANSWER':
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-sm btn-suggestion';
-            btn.dataset.query = content.trim();
-            btn.textContent = content.trim();
-            hotAnswersContainer.appendChild(btn);
-            content = '';
-            break;
-        }
-        // Highlight new code
-        msgDiv.querySelectorAll('pre code').forEach(block => {
-          if (!block.dataset.highlighted) Prism.highlightElement(block);
-        });
-      }
-
-      function formatText(text) {
-        // Convert markdown-like syntax
-        let html = text
-          .replace(/\n/g, '<br>')
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em>$1</em>')
-          .replace(/`(.*?)`/g, '<code style="background:rgba(255,255,255,0.1);padding:2px 4px;border-radius:3px;">$1</code>');
-        return html;
-      }
-
-      function createCodeBlock(filename, lang, code) {
-        const id = 'code-' + Math.random().toString(36).substr(2, 9);
-        return `
-          <div class="code-wrapper">
-            <div class="code-header">
-              <span><i class="bi bi-code-slash me-1"></i>${filename}</span>
-              <div class="code-actions"><button onclick="copyToClipboard('${id}')"><i class="bi bi-clipboard"></i> Copy</button></div>
-            </div>
-            <pre class="code-block"><code id="${id}" class="language-${lang}">${escapeHtml(code)}</code></pre>
-          </div>`;
-      }
-
-      function createTerminalBlock(cmd) {
-        const id = 'term-' + Math.random().toString(36).substr(2, 9);
-        return `
-          <div class="terminal-box" id="${id}">
-            <div class="mb-1">$ ${escapeHtml(cmd.trim())}</div>
-            <div class="terminal-actions">
-              <button onclick="copyToClipboard('${id}')"><i class="bi bi-clipboard"></i> Copy</button>
-              <button class="accept" onclick="handleTerminal('${id}','accept')">✅ Accept</button>
-              <button class="decline" onclick="handleTerminal('${id}','decline')">❌ Decline</button>
-            </div>
-          </div>`;
-      }
-
-      window.copyToClipboard = id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const text = el.querySelector('code') ? el.querySelector('code').textContent : el.querySelector('.mb-1')?.textContent.replace('$ ', '');
-        navigator.clipboard.writeText(text || '');
-        alert('Copied to clipboard!');
-      };
-
-      window.handleTerminal = (id, action) => {
-        const box = document.getElementById(id);
-        box.querySelector('.terminal-actions').style.display = 'none';
-        box.insertAdjacentHTML('beforeend', `<div class="mt-2 ${action === 'accept' ? 'text-success' : 'text-danger'} fs-sm">${action === 'accept' ? '✅ Command approved and executed.' : '⛔ Command declined.'}</div>`);
-      };
-
-      function viewMedia(type, src) {
-        if (type === 'image') mediaContent.innerHTML = `<img src="${src}" class="img-fluid">`;
-        else if (type === 'pdf') mediaContent.innerHTML = `<iframe src="${src}" style="width:100%;height:70vh;border:none;"></iframe>`;
-        mediaViewerModal.show();
-      }
-
-      function extractYoutubeId(url) {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : url;
-      }
-
-      function escapeHtml(unsafe) { return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-
-      function showTyping() {
-        removeTyping();
-        const div = document.createElement('div');
-        div.id = 'typing';
-        div.className = 'message ai-message';
-        div.innerHTML = `<div class="message-header"><i class="bi bi-robot me-1"></i> Fareed</div><div class="message-content"><span class="typing-dots">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span></div>`;
-        chatMessages.appendChild(div);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }
-
-      function removeTyping() { document.getElementById('typing')?.remove(); }
-
-      function addMessageToChat(role, text, fileCount = 0) {
-        const div = document.createElement('div');
-        div.className = `message ${role === 'system' ? 'system-message' : role + '-message'}`;
-        const icon = role === 'user' ? '👤 You' : role === 'system' ? '⚙️ System' : '🤖 Fareed';
-        let content = formatText(text);
-        if (fileCount > 0) content += `<br><span class="opacity-75 fs-sm mt-1 d-inline-block"><i class="bi bi-paperclip"></i> ${fileCount} file(s) attached</span>`;
-        div.innerHTML = `<div class="message-header">${icon}</div><div class="message-content">${content}</div>`;
-        chatMessages.appendChild(div);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }
-
-      // --- File Handling ---
-      function handleFileSelect(e) {
-        const files = Array.from(e.target.files);
-        uploadedFiles = [...uploadedFiles, ...files];
-        updateAttachmentPreview();
-      }
-
-      function updateAttachmentPreview() {
-        attachmentPreview.innerHTML = '';
-        if (uploadedFiles.length === 0) {
-          attachmentPreview.classList.add('d-none');
-          return;
-        }
-        attachmentPreview.classList.remove('d-none');
-        uploadedFiles.forEach((file, idx) => {
-          const chip = document.createElement('div');
-          chip.className = 'attachment-chip';
-          const icon = file.type.startsWith('image/') ? `<img src="${URL.createObjectURL(file)}" alt="">` : `<i class="bi bi-file-earmark"></i>`;
-          chip.innerHTML = `${icon} <span class="text-truncate" style="max-width:120px;">${file.name}</span> <i class="bi bi-x" data-idx="${idx}"></i>`;
-          attachmentPreview.appendChild(chip);
-        });
-        sendBtn.disabled = false;
-      }
-
-      // --- History & Conversations ---
-      function addMessageToHistory(msgObj) {
-        const card = document.createElement('div');
-        card.className = 'history-card';
-        let type = msgObj.role;
-        if (msgObj.role === 'tool') type = 'response';
-        
-        let contentPreview = '';
-        if (msgObj.role === 'assistant' && msgObj.tool_calls) {
-          contentPreview = `Calling: ${msgObj.tool_calls.map(t => t.function.name).join(', ')}`;
-        } else {
-          contentPreview = msgObj.content || '';
-        }
-        
-        const previewText = contentPreview.length > 100 ? contentPreview.substring(0, 100) + '...' : contentPreview;
-
-        card.innerHTML = `
-          <div class="history-card-header type-${type}">
-            <span><i class="bi bi-${type === 'user' ? 'person' : type === 'response' ? 'box' : 'robot'} me-1"></i> ${type.toUpperCase()}</span>
-            <i class="bi bi-chevron-down expand-icon"></i>
-          </div>
-          <div class="history-preview">${escapeHtml(previewText)}</div>
-        `;
-
-        card.querySelector('.history-card-header').addEventListener('click', (e) => {
-          e.stopPropagation();
-          const preview = card.querySelector('.history-preview');
-          const icon = card.querySelector('.expand-icon');
-          preview.classList.toggle('expanded');
-          icon.classList.toggle('rotated');
-        });
-
-        historyList.prepend(card);
-      }
-
-      async function loadConversations() {
-        try {
-          const res = await fetch(`${BASE_URL}/conversations`);
-          if (!res.ok) throw new Error('Failed');
-          const data = await res.json();
-          const convs = data.conversations || [];
-          convList.innerHTML = '';
-          convs.forEach(conv => {
-            const item = document.createElement('div');
-            item.className = 'conv-item';
-            item.innerHTML = `<div class="conv-title">${conv.title || 'Untitled'}</div>`;
-            item.addEventListener('click', () => loadConversation(conv.id, item));
-            convList.appendChild(item);
-          });
-        } catch (err) {
-          console.warn('Using mock conversation data', err);
-          // Mock data
-          convList.innerHTML = `
-            <div class="conv-item" data-id="512"><div class="conv-title">Project Architecture</div></div>
-            <div class="conv-item" data-id="513"><div class="conv-title">Python Script Review</div></div>
-            <div class="conv-item" data-id="514"><div class="conv-title">Daily Summary</div></div>
-          `;
-          convList.querySelectorAll('.conv-item').forEach(item => {
-            item.addEventListener('click', () => loadConversation(item.dataset.id, item));
-          });
-        }
-      }
-
-      async function loadConversation(id, item) {
-        convList.querySelectorAll('.conv-item').forEach(i => i.classList.remove('active'));
-        item.classList.add('active');
-        if (window.innerWidth < 992) leftDrawer.classList.remove('show');
-
-        chatMessages.innerHTML = '';
-        historyList.innerHTML = '';
-        
-        try {
-          const res = await fetch(`${BASE_URL}/conversations/${id}`);
-          const data = await res.json();
-          const messages = data.messages || [];
-          messages.forEach(msg => {
-            if (msg.role === 'user') addMessageToChat('user', msg.content, 0);
-            else if (msg.role === 'system') addMessageToChat('system', msg.content);
-            else addMessageToChat('ai', msg.content);
-            addMessageToHistory(msg);
-          });
-        } catch (err) {
-          console.warn('Mock load');
-          addMessageToChat('user', 'What is the time now?');
-          addMessageToHistory({role:'user', content:'What is the time now?'});
-          addMessageToChat('ai', "I'll check the current time for you.");
-          addMessageToHistory({role:'assistant', content:"I'll check the current time for you."});
-        }
-      }
-
-      // --- Settings ---
-      async function loadSettings() {
-        try {
-          const res = await fetch(`${BASE_URL}/settings`);
-          const data = await res.json();
-          currentSettings = data.settings || {};
-        } catch (err) {
-          console.warn('Using mock settings', err);
-          currentSettings = {
-            'theme': { type: 'dropdown menu', options: [{name:'Dark', value:'dark', is_selected:true}, {name:'Light', value:'light', is_selected:false}] },
-            'notifications': { type: 'checkbox', checked: true },
-            'languages': { type: 'checklist', items: [['en', true], ['ar', false], ['fr', false]] },
-            'model_behavior': { type: 'radio button', options: [{name:'Concise', value:'concise', is_selected:false}, {name:'Detailed', value:'detailed', is_selected:true}] },
-            'system_prompt': { type: 'text', value: 'You are Fareed.', placeholder: 'Enter system prompt...' }
-          };
-        }
-        renderSettingsForm();
-      }
-
-      function renderSettingsForm() {
-        settingsForm.innerHTML = '';
-        for (const [key, setting] of Object.entries(currentSettings)) {
-          const group = document.createElement('div');
-          group.className = 'settings-group';
-          let label = key.replace(/_/g, ' ').toUpperCase();
-          
-          group.innerHTML = `<label class="settings-label">${label}</label>`;
-          
-          if (setting.type === 'dropdown menu' || setting.type === 'radio button') {
-            setting.options.forEach(opt => {
-              if (setting.type === 'dropdown menu') {
-                // Built in next tick to avoid innerHTML overwrite issues
-              }
-            });
-            if (setting.type === 'dropdown menu') {
-              const select = document.createElement('select');
-              select.className = 'form-select futuristic-select';
-              setting.options.forEach(opt => {
-                select.innerHTML += `<option value="${opt.value}" ${opt.is_selected ? 'selected' : ''}>${opt.name}</option>`;
-              });
-              select.onchange = () => updateSetting(key, select.value);
-              group.appendChild(select);
-            } else {
-              setting.options.forEach(opt => {
-                const div = document.createElement('div');
-                div.className = 'form-check';
-                div.innerHTML = `
-                  <input class="form-check-input" type="radio" name="${key}" value="${opt.value}" ${opt.is_selected ? 'checked' : ''}>
-                  <label class="form-check-label">${opt.name}</label>
-                `;
-                div.querySelector('input').onchange = () => updateSetting(key, opt.value);
-                group.appendChild(div);
-              });
-            }
-          } else if (setting.type === 'checkbox') {
-            const div = document.createElement('div');
-            div.className = 'form-check form-switch';
-            div.innerHTML = `
-              <input class="form-check-input futuristic-switch" type="checkbox" ${setting.checked ? 'checked' : ''}>
-              <label class="form-check-label">${setting.checked ? 'Enabled' : 'Disabled'}</label>
-            `;
-            div.querySelector('input').onchange = (e) => {
-              div.querySelector('label').textContent = e.target.checked ? 'Enabled' : 'Disabled';
-              updateSetting(key, e.target.checked);
-            };
-            group.appendChild(div);
-          } else if (setting.type === 'checklist') {
-            setting.items.forEach((item, idx) => {
-              const label = document.createElement('label');
-              label.className = 'checklist-item';
-              label.innerHTML = `
-                <input type="checkbox" class="form-check-input" ${item[1] ? 'checked' : ''}>
-                <span>${item[0]}</span>
-              `;
-              label.querySelector('input').onchange = (e) => {
-                setting.items[idx][1] = e.target.checked;
-                updateSetting(key, setting.items);
-              };
-              group.appendChild(label);
-            });
-          } else if (setting.type === 'text') {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'form-control futuristic-select';
-            input.value = setting.value || '';
-            input.placeholder = setting.placeholder || '';
-            input.onchange = () => updateSetting(key, input.value);
-            group.appendChild(input);
-          }
-          settingsForm.appendChild(group);
-        }
-      }
-
-      function updateSetting(key, value) {
-        // Update local state
-        if (Array.isArray(value)) {
-           currentSettings[key].items = value;
-        } else {
-           currentSettings[key] = typeof currentSettings[key] === 'object' ? {...currentSettings[key], value, checked: typeof value === 'boolean' ? value : currentSettings[key].checked} : value;
-        }
-        
-        // Send to backend
-        fetch(`${BASE_URL}/settings`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ settings: currentSettings })
-        }).catch(console.error);
-      }
-
-      // --- Voice Call ---
-      async function startVoiceCall() {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          isCallActive = true;
-          userInput.disabled = true;
-          userInput.placeholder = 'Voice call active...';
-          voiceCallOverlay.classList.remove('d-none');
-          callStatusText.textContent = 'Connecting...';
-
-          voiceWs = new WebSocket(`${BASE_URL}/call`);
-          
-          voiceWs.onopen = () => {
-            callStatusText.textContent = '🔊 Connected to Fareed';
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = e => {
-              if (e.data.size > 0 && voiceWs.readyState === WebSocket.OPEN) {
-                voiceWs.send(e.data);
-              }
-            };
-            mediaRecorder.start(200); // Chunks every 200ms
-          };
-
-          voiceWs.onmessage = async (event) => {
-            if (event.data instanceof Blob) {
-              const audioBlob = event.data;
-              const audioUrl = URL.createObjectURL(audioBlob);
-              const audio = new Audio(audioUrl);
-              audio.play();
-            }
-          };
-
-          voiceWs.onerror = () => {
-            stopVoiceCall();
-            alert('Voice call error.');
-          };
-
-        } catch (err) {
-          console.error('Mic error', err);
-          alert('Microphone access denied.');
-        }
-      }
-
-      function stopVoiceCall() {
-        isCallActive = false;
-        voiceCallOverlay.classList.add('d-none');
-        userInput.disabled = false;
-        userInput.placeholder = 'Type your message...';
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-        if (stream) stream.getTracks().forEach(t => t.stop());
-        if (voiceWs) voiceWs.close();
-      }
-
-      // --- Utilities ---
-      window.copyToClipboard = id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const text = el.querySelector('code') ? el.querySelector('code').textContent : el.querySelector('.mb-1')?.textContent.replace('$ ', '');
-        navigator.clipboard.writeText(text || '');
-        alert('Copied!');
-      };
-    });
-  </script>
+  <script src="script.js" type="module"></script>
 </body>
 </html>
-

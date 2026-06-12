@@ -1,211 +1,488 @@
+
+import Parser from './Parser.js';
+
+// ============================================
+// FAREED AI ASSISTANT - FRONTEND (Socket.IO)
+// ============================================
+const BASE_URL = 'http://localhost:5000';
 document.addEventListener('DOMContentLoaded', () => {
-  const chatMessages = document.getElementById('chatMessages');
-  const userInput = document.getElementById('userInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const fileUpload = document.getElementById('fileUpload');
-  const attachmentPreview = document.getElementById('attachmentPreview');
-  const systemMsgToggle = document.getElementById('systemMsgToggle');
-  const themeToggle = document.getElementById('themeToggle');
-  const voiceCallBtn = document.getElementById('voiceCallBtn');
-  const voiceInputBtn = document.getElementById('voiceInputBtn');
-  const voiceCallOverlay = document.getElementById('voiceCallOverlay');
-  const endCallBtn = document.getElementById('endCallBtn');
-  const historyList = document.getElementById('historyList');
-  const hotAnswers = document.querySelectorAll('.btn-suggestion');
+    const chatMessages = document.getElementById('chatMessages');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const fileUpload = document.getElementById('fileUpload');
+    const attachmentPreview = document.getElementById('attachmentPreview');
+    const systemMsgToggle = document.getElementById('systemMsgToggle');
+    const themeToggle = document.getElementById('themeToggle');
+    const voiceInputBtn = document.getElementById('voiceInputBtn');
+    const historyList = document.getElementById('historyList');
+    const chatsList = document.getElementById('chatsList');
+    const newchatBtn = document.getElementById('newchatBtn');
+    const dropZone = document.getElementById('dropZone');
 
-  let uploadedFiles = [];
-  let isCallActive = false;
-  let recognition = null;
+    let uploadedFiles = [];
+    let isCallActive = false;
+    let recognition = null;
+    let socket = null;
+    let currentChatId = null;  // null until created
+    let isReceivingChunks = false;
+    let messageBuffer = '';
+    let settings = { autoScroll: true, codeWrap: true, animSpeed: 300, baseUrl: BASE_URL };
 
-  // Initialize Speech Recognition (Voice Input)
-  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (e) => {
-      userInput.value = Array.from(e.results).map(r => r[0].transcript).join(' ');
-      userInput.dispatchEvent(new Event('input')); // Trigger auto-resize if implemented
-    };
-    recognition.onend = () => voiceInputBtn.classList.remove('text-danger');
-    recognition.onerror = (e) => console.warn('Voice input error:', e.error);
-  }
-
-  // Theme Toggle
-  themeToggle.addEventListener('click', () => {
-    const html = document.documentElement;
-    const isDark = html.getAttribute('data-bs-theme') === 'dark';
-    html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
-    themeToggle.innerHTML = isDark ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-stars-fill"></i>';
-  });
-
-  // Voice Input Toggle
-  voiceInputBtn.addEventListener('click', () => {
-    if (!recognition) return alert('Voice input not supported in this browser.');
-    if (isCallActive) return alert('End voice call first.');
-    recognition.state === 'inactive' ? (recognition.start(), voiceInputBtn.classList.add('text-danger')) : recognition.stop();
-  });
-
-  // File Upload & Preview
-  fileUpload.addEventListener('change', (e) => {
-    uploadedFiles = Array.from(e.target.files);
-    attachmentPreview.innerHTML = '';
-    uploadedFiles.forEach((file, idx) => {
-      const chip = document.createElement('div');
-      chip.className = 'attachment-chip';
-      const icon = file.type.startsWith('image/') ? `<img src="${URL.createObjectURL(file)}" alt="${file.name}">` : `<i class="bi bi-file-earmark-${file.name.split('.').pop()}"></i>`;
-      chip.innerHTML = `${icon} <span>${file.name}</span> <i class="bi bi-x" data-idx="${idx}"></i>`;
-      attachmentPreview.appendChild(chip);
-    });
-    uploadedFiles.length > 0 ? attachmentPreview.classList.remove('d-none') : attachmentPreview.classList.add('d-none');
-  });
-
-  attachmentPreview.addEventListener('click', (e) => {
-    if (e.target.classList.contains('bi-x')) {
-      const idx = parseInt(e.target.dataset.idx);
-      uploadedFiles.splice(idx, 1);
-      const dt = new DataTransfer();
-      uploadedFiles.forEach(f => dt.items.add(f));
-      fileUpload.files = dt.files;
-      fileUpload.dispatchEvent(new Event('change'));
+    // ============================================
+    // SPEECH RECOGNITION
+    // ============================================
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+        recognition.onresult = (e) => {
+            userInput.value = Array.from(e.results).map(r => r[0].transcript).join(' ');
+            autoResizeTextarea();
+        };
+        recognition.onend = () => voiceInputBtn.classList.remove('recording');
+        recognition.onerror = (e) => {
+            console.warn('Voice input error:', e.error);
+            voiceInputBtn.classList.remove('recording');
+        };
     }
-  });
 
-  // Send Message
-  const sendMessage = async (text = null) => {
-    const messageText = text || userInput.value.trim();
-    const isSystem = systemMsgToggle.checked;
-    if (!messageText && uploadedFiles.length === 0) return;
-
-    addMessage('user', messageText, uploadedFiles.length);
-    addToHistory('user', messageText, uploadedFiles.length > 0 ? '📎' : '👤');
-    
-    userInput.value = '';
-    uploadedFiles = [];
-    fileUpload.value = '';
-    attachmentPreview.innerHTML = '';
-    attachmentPreview.classList.add('d-none');
-
-    showTyping();
-    try {
-      // 🔌 BACKEND INTEGRATION POINT
-      // const res = await fetch('/api/chat', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ message: messageText, isSystem, model: document.getElementById('modelSelector').value, files: [] }) // Handle files via FormData in production
-      // });
-      // const data = await res.json();
-
-      // Simulated AI Response
-      setTimeout(() => {
-        removeTyping();
-        const mockResponse = `Here's a sample integration:\n\`\`\`python\nimport requests\nres = requests.get("https://api.fareed.ai/v1/query", params={"q": "${messageText}"})\nprint(res.json())\n\`\`\`\nRun it with:\n\`\`\`terminal\npython main.py\n\`\`\`\nLet me know if you need adjustments!`;
-        addMessage('ai', mockResponse);
-        addToHistory('ai', mockResponse, '🤖');
-        
-        // Simulate Tool Call/Response
-        if (Math.random() > 0.5) {
-          addToHistory('tool', `tool_call: search_db("${messageText}")`, '🛠️');
-          setTimeout(() => addToHistory('response', `{"status": "ok", "data": ["result1", "result2"]}`, '📦'), 500);
+    voiceInputBtn.addEventListener('click', () => {
+        if (!recognition) return alert('Voice input not supported.');
+        if (isCallActive) return alert('End voice call first.');
+        if (recognition.state === 'inactive') {
+            recognition.start();
+            voiceInputBtn.classList.add('recording');
+        } else {
+            recognition.stop();
         }
-      }, 1200);
-    } catch (err) {
-      removeTyping();
-      addMessage('system', '⚠️ Failed to reach Fareed backend.');
+    });
+
+    // ============================================
+    // THEME TOGGLE
+    // ============================================
+    themeToggle.addEventListener('click', () => {
+        const html = document.documentElement;
+        const isDark = html.getAttribute('data-bs-theme') === 'dark';
+        html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
+        themeToggle.innerHTML = isDark ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-stars-fill"></i>';
+        localStorage.setItem('fareed-theme', isDark ? 'light' : 'dark');
+    });
+    const savedTheme = localStorage.getItem('fareed-theme');
+    if (savedTheme) {
+        document.documentElement.setAttribute('data-bs-theme', savedTheme);
+        themeToggle.innerHTML = savedTheme === 'dark' ? '<i class="bi bi-moon-stars-fill"></i>' : '<i class="bi bi-sun-fill"></i>';
     }
-  };
 
-  sendBtn.addEventListener('click', () => sendMessage());
-  userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+    // ============================================
+    // FILE HANDLING (drag & drop, preview)
+    // ============================================
+    function handleFiles(e) {
+        const files = Array.from(e.target.files);
+        uploadedFiles.push(...files);
+        renderAttachmentPreview();
+    }
 
-  // Hot Answers
-  hotAnswers.forEach(btn => btn.addEventListener('click', () => sendMessage(btn.dataset.query)));
+    function renderAttachmentPreview() {
+        attachmentPreview.innerHTML = '';
+        uploadedFiles.forEach((file, idx) => {
+            const chip = document.createElement('div');
+            chip.className = 'attachment-chip';
+            let icon = '';
+            if (file.type.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                icon = img.outerHTML;
+            } else {
+                const ext = file.name.split('.').pop();
+                const iconClass = getFileIcon(ext);
+                icon = `<i class="bi ${iconClass}"></i>`;
+            }
+            chip.innerHTML = `${icon}<span class="text-truncate">${file.name}</span><i class="bi bi-x" data-idx="${idx}"></i>`;
+            attachmentPreview.appendChild(chip);
+        });
+        attachmentPreview.classList.toggle('d-none', uploadedFiles.length === 0);
+        updateSendButtonState();
+    }
 
-  // Voice Call UI
-  voiceCallBtn.addEventListener('click', () => {
-    isCallActive = true;
-    userInput.disabled = true;
-    userInput.placeholder = 'Voice call active...';
-    voiceCallOverlay.classList.remove('d-none');
-    setTimeout(() => document.getElementById('callStatusText').textContent = '🔊 Connected to Fareed', 1500);
-  });
+    function getFileIcon(ext) {
+        const icons = {
+            'pdf': 'bi-file-earmark-pdf-fill', 'txt': 'bi-file-earmark-text-fill',
+            'py': 'bi-file-earmark-code-fill', 'html': 'bi-file-earmark-code-fill',
+            'css': 'bi-file-earmark-code-fill', 'js': 'bi-file-earmark-code-fill',
+            'json': 'bi-file-earmark-code-fill', 'mp3': 'bi-file-earmark-music-fill',
+            'wav': 'bi-file-earmark-music-fill', 'mp4': 'bi-file-earmark-play-fill'
+        };
+        return icons[ext] || 'bi-file-earmark-fill';
+    }
 
-  endCallBtn.addEventListener('click', () => {
-    isCallActive = false;
-    userInput.disabled = false;
-    userInput.placeholder = 'Type your message...';
-    voiceCallOverlay.classList.add('d-none');
-    // 🔌 BACKEND: Send call termination signal
-  });
+    attachmentPreview.addEventListener('click', (e) => {
+        if (e.target.classList.contains('bi-x')) {
+            const idx = parseInt(e.target.dataset.idx);
+            uploadedFiles.splice(idx, 1);
+            const dt = new DataTransfer();
+            uploadedFiles.forEach(f => dt.items.add(f));
+            fileUpload.files = dt.files;
+            renderAttachmentPreview();
+        }
+    });
 
-  // UI Helpers
-  function addMessage(role, text, fileCount = 0) {
-    const div = document.createElement('div');
-    div.className = `message ${role}-message`;
-    const icon = role === 'user' ? '👤 You' : role === 'system' ? '⚙️ System' : '🤖 Fareed';
-    let content = formatMessage(text);
-    if (fileCount > 0) content += `<br><span class="opacity-75 fs-sm"><i class="bi bi-paperclip"></i> ${fileCount} file(s)</span>`;
-    div.innerHTML = `<div class="message-header">${icon}</div><div class="message-content">${content}</div>`;
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    highlightCodeBlocks(div);
-  }
+    fileUpload.addEventListener('change', handleFiles);
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+    function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+    });
+    dropZone.addEventListener('drop', (e) => {
+        const files = Array.from(e.dataTransfer.files);
+        uploadedFiles.push(...files);
+        renderAttachmentPreview();
+    });
 
-  function formatMessage(text) {
-    return text
-      .replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
-        const id = 'code-' + Math.random().toString(36).substr(2, 6);
-        return `<div class="code-wrapper"><pre class="code-block" id="${id}"><code class="language-${lang || 'plaintext'}">${escapeHtml(code.trim())}</code></pre><div class="code-actions"><button onclick="copyToClipboard('${id}')"><i class="bi bi-clipboard"></i> Copy</button></div></div>`;
-      })
-      .replace(/```terminal\n([\s\S]*?)```/g, (_, cmd) => {
-        const id = 'term-' + Math.random().toString(36).substr(2, 6);
-        return `<div class="terminal-box" id="${id}"><div class="mb-1">$ ${escapeHtml(cmd.trim())}</div><div class="terminal-actions"><button onclick="copyToClipboard('${id}')"><i class="bi bi-clipboard"></i> Copy</button><button onclick="handleTerminal('${id}','accept')">✅ Accept</button><button onclick="handleTerminal('${id}','decline')">❌ Decline</button></div></div>`;
-      })
-      .replace(/\n/g, '<br>');
-  }
+    // ============================================
+    // WEBSOCKET INITIALIZATION (FastAPI Native)
+    // ============================================
+    let streamTimeout = null;
+    
+    function resetStreamTimeout() {
+        if (streamTimeout) clearTimeout(streamTimeout);
+        streamTimeout = setTimeout(() => {
+            if (isReceivingChunks && messageBuffer) {
+                if (Parser.typingDiv) {
+                    Parser.typingDiv.removeAttribute('id');
+                    const content = Parser.typingDiv.querySelector('.message-content');
+                    if (content) {
+                        content.querySelectorAll('.typing-dots').forEach(el => el.remove());
+                    }
+                }
+                addToHistory(
+                    'assistant',
+                    messageBuffer,
+                    '🤖'
+                );
+                messageBuffer = '';
+                Parser.typingDiv = null;
+                isReceivingChunks = false;
+                updateSendButtonState();
+            }
+        }, 1200); // 1.2s after last chunk, consider stream ended
+    }
+    
+    function initWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const hostname = window.location.hostname || 'localhost';
+        const port = window.location.port || '5000';
+        const wsUrl = `${BASE_URL}/chat`;
+        
+        socket = new WebSocket(wsUrl);
+        
+        socket.onopen = () => {
+            console.log('✅ WebSocket connected');
+            if (currentChatId) {
+                socket.send(JSON.stringify({
+                    type: 'join_chat',
+                    chat_id: currentChatId
+                }));
+            }
+        };
+        
+        socket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                const eventType = data.type;
+                
+                if (eventType === 'server_message') {
+                    // Handle streaming messages
+                    if (data.chat_id !== currentChatId) return;
+                    
+                    if (!isReceivingChunks) {
+                        messageBuffer = '';
+                        isReceivingChunks = true;
+                    }
+                    
+                    messageBuffer += data.message || '';
+                    
+                    if (Parser.typingDiv == null) {
+                        Parser.typingDiv = document.getElementById('typing');
+                    } else {
+                        Parser.parse(data.message)
+                    }
+                    resetStreamTimeout();
+                    
+                } else if (eventType === 'server_error') {
+                    // Handle errors
+                    removeTyping();
+                    addMessage('system', `⚠️ ${data.error}`);
+                    isReceivingChunks = false;
+                    updateSendButtonState();
+                }
+            } catch (e) {
+                console.error('Error parsing WebSocket message:', e);
+            }
+        };
+        
+        socket.onerror = (error) => {
+            console.error('❌ WebSocket error:', error);
+            addMessage('system', '⚠️ Connection error occurred');
+        };
+        
+        socket.onclose = () => {
+            console.log('⚠️ WebSocket disconnected');
+            addMessage('system', '⚠️ Connection closed');
+        };
+    }
 
-  function escapeHtml(unsafe) { return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function showTyping() {
 
-  window.copyToClipboard = (id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const text = el.querySelector('code') ? el.querySelector('code').textContent : el.querySelector('.mb-1')?.textContent.replace('$ ', '');
-    navigator.clipboard.writeText(text || '');
-  };
+        Parser.typingDiv = document.createElement('div');
 
-  window.handleTerminal = (id, action) => {
-    console.log(`Terminal command ${action}: ${id}`);
-    // 🔌 BACKEND: Send accept/decline payload
-    const btns = document.querySelectorAll(`#${id} .terminal-actions button`);
-    btns.forEach(b => b.disabled = true);
-    document.querySelector(`#${id}`).insertAdjacentHTML('beforeend', `<div class="mt-2 text-success fs-sm">${action === 'accept' ? '✅ Command approved.' : '⛔ Command declined.'}</div>`);
-  };
+        Parser.typingDiv.id = 'typing';
 
-  function highlightCodeBlocks(container) {
-    container.querySelectorAll('pre code').forEach(block => Prism.highlightElement(block));
-  }
+        Parser.typingDiv.className = 'message ai-message';
 
-  function showTyping() {
-    const div = document.createElement('div');
-    div.id = 'typing';
-    div.className = 'message ai-message';
-    div.innerHTML = `<div class="message-header">🤖 Fareed</div><div class="message-content"><span class="typing-dots">Thinking<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></span></div>`;
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
+        Parser.typingDiv.innerHTML = `
+            <div class="message-header">
+                🤖 Fareed
+            </div>
 
-  function removeTyping() { document.getElementById('typing')?.remove(); }
+            <div class="message-content">
+                <span class="typing-dots">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </span>
+            </div>
+        `;
 
-  function addToHistory(role, text, icon = '📝') {
-    const item = document.createElement('div');
-    item.className = `history-item type-${role}`;
-    const shortText = text.length > 60 ? text.substring(0, 60) + '...' : text;
-    item.innerHTML = `<div class="history-meta"><span>${icon} ${role.toUpperCase()}</span><span class="opacity-50">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div><div class="text-truncate">${escapeHtml(shortText)}</div>`;
-    historyList.prepend(item);
-  }
+        chatMessages.appendChild(Parser.typingDiv);
 
-  // Auto-resize textarea
-  userInput.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = (this.scrollHeight > 150 ? 150 : this.scrollHeight) + 'px'; });
+        if (settings.autoScroll) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        return Parser.typingDiv;
+    }
+
+    // ============================================
+    // SEND MESSAGE (with auto chat creation)
+    // ============================================
+    window.sendMessage = async function sendMessage(text = null) {
+        const messageText = text || userInput.value.trim();
+        document.getElementById('hotAnswers').innerHTML = '';
+        // Ensure we have a valid chat_id
+        if (!currentChatId) {
+            try {
+                const res = await fetch(`${settings.baseUrl}/chats`, { method: 'POST' });
+                if (!res.ok) throw new Error('Failed to create chat');
+                const data = await res.json();
+                currentChatId = data.chat_id;
+                if (socket?.connected) socket.emit('join_chat', { chat_id: currentChatId });
+                await loadchats();
+            } catch (err) {
+                console.error(err);
+                addMessage('system', '⚠️ Could not start a new chat. Please refresh.');
+                return;
+            }
+        }
+
+        const isSystem = systemMsgToggle.checked;
+        const filesToSend = [...uploadedFiles];
+
+        // Display user message
+        addMessage('user', messageText, filesToSend.length);
+        addToHistory('user', messageText, '👤');
+
+        // Clear input & attachments
+        userInput.value = '';
+        autoResizeTextarea();
+        // uploadedFiles = [];
+        // fileUpload.value = '';
+        attachmentPreview.innerHTML = '';
+        attachmentPreview.classList.add('d-none');
+        updateSendButtonState();
+        showTyping();
+
+        const payload = {
+            type: 'client_message',
+            chat_id: currentChatId,
+            message: messageText,
+            is_system_message: isSystem ? true : false
+        };
+
+        if (socket?.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify(payload));
+        } else {
+            removeTyping();
+            addMessage('system', '⚠️ Not connected. Retrying...');
+            setTimeout(() => sendMessage(messageText), 2000);
+        }
+    }
+
+    // ============================================
+    // UI HELPERS
+    // ============================================
+    function updateSendButtonState() {
+        const hasContent = userInput.value.trim().length > 0 || uploadedFiles.length > 0;
+        sendBtn.disabled = !hasContent || isReceivingChunks || isCallActive;
+    }
+
+    function autoResizeTextarea() {
+        userInput.style.height = 'auto';
+        userInput.style.height = Math.min(userInput.scrollHeight, 150) + 'px';
+        updateSendButtonState();
+    }
+
+    userInput.addEventListener('input', () => {
+        autoResizeTextarea();
+        updateSendButtonState();
+    });
+
+    sendBtn.addEventListener('click', () => sendMessage());
+    userInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // New chat button
+    newchatBtn.addEventListener('click', async () => {
+        try {
+            const res = await fetch(`${settings.baseUrl}/chats`, { method: 'POST' });
+            const data = await res.json();
+            currentChatId = data.chat_id;
+            chatMessages.innerHTML = '';
+            historyList.innerHTML = '';
+            addMessage('ai', "Hi, I'm Fareed. How can I help you?");
+            if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'join_chat',
+                    chat_id: currentChatId
+                }));
+            }
+            bootstrap.Offcanvas.getInstance(document.getElementById('chatsDrawer'))?.hide();
+            loadchats();
+        } catch (err) {
+            console.error('New chat error:', err);
+            addMessage('system', '⚠️ Failed to start new chat.');
+        }
+    });
+
+    // Load all chats from REST API
+    async function loadchats() {
+        try {
+            const res = await fetch(`${settings.baseUrl}/chats`);
+            let chats = await res.json();
+            if (!Array.isArray(chats)) chats = chats.chats || [];
+            renderchatsList(chats);
+        } catch (err) {
+            console.error('Load chats failed:', err);
+            renderchatsList([]);
+        }
+    }
+
+    function renderchatsList(chats) {
+        chatsList.innerHTML = '';
+        chats.forEach(conv => {
+            const card = document.createElement('div');
+            card.className = `chat-card${conv.chat_id === currentChatId ? ' active' : ''}`;
+            card.innerHTML = `
+                <div class="chat-title">${escapeHtml(conv.title || 'Untitled')}</div>
+                <div class="chat-meta"><span>${new Date(conv.updated).toLocaleDateString()}</span></div>
+            `;
+            card.addEventListener('click', () => loadchat(conv.chat_id));
+            chatsList.appendChild(card);
+        });
+    }
+
+    async function loadchat(chatId) {
+        try {
+            const res = await fetch(`${settings.baseUrl}/chats/${chatId}`);
+            if (!res.ok) throw new Error('Not found');
+            const data = await res.json();
+            chatMessages.innerHTML = '';
+            historyList.innerHTML = '';
+            currentChatId = chatId;
+            if (data.messages?.length) {
+                data.messages.forEach(msg => {
+                    if (msg.role === 'user') {
+                        addMessage('user', msg.content);
+                        addToHistory('user', msg.content, '👤');
+                    } else if (msg.role === 'assistant') {
+                        addMessage('ai', msg.content);
+                        addToHistory('assistant', msg.content, '🤖');
+                    } else if (msg.role === 'system') {
+                        addMessage('system', msg.content);
+                    }
+                });
+            } else {
+                addMessage('ai', "chat loaded. Ask me anything!");
+            }
+            document.querySelectorAll('.chat-card').forEach(c => c.classList.remove('active'));
+            if (socket?.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'join_chat',
+                    chat_id: chatId
+                }));
+            }
+        } catch (err) {
+            console.error('Load chat error:', err);
+            addMessage('system', '⚠️ Could not load chat.');
+        }
+    }
+
+    function addToHistory(role, content, icon = '📝') {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        const typeClass = { 'user':'user', 'assistant':'assistant' }[role] || 'system';
+        const short = content.length > 80 ? content.substring(0, 80).replace(/<[^>]*>/g, '') + '...' : content.replace(/<[^>]*>/g, '');
+        item.innerHTML = `
+            <div class="history-header" onclick="window.toggleHistoryItem(this)">
+                <span class="history-type ${typeClass}">${role}</span>
+                <span class="history-toggle"><i class="bi bi-chevron-down"></i></span>
+            </div>
+            <div class="history-meta">${icon} ${new Date().toLocaleTimeString()}</div>
+            <div class="history-preview text-truncate">${escapeHtml(short)}</div>
+            <div class="history-content">${escapeHtml(content).replace(/\n/g, '<br>')}</div>
+        `;
+        historyList.prepend(item);
+    }
+
+    window.toggleHistoryItem = function(header) {
+        header.closest('.history-item').classList.toggle('expanded');
+    };
+
+    function addMessage(role, content, fileCount = 0) {
+        const div = document.createElement('div');
+        div.className = `message ${role}-message`;
+        const headers = { 'user':'👤 You', 'ai':'🤖 Fareed', 'system':'⚙️ System' };
+        let displayContent = content;
+        if (fileCount > 0) displayContent += `<br><span class="opacity-75 fs-sm"><i class="bi bi-paperclip"></i> ${fileCount} file(s)</span>`;
+        div.innerHTML = `<div class="message-header">${headers[role] || role}</div><div class="message-content">${displayContent}</div>`;
+        chatMessages.appendChild(div);
+        if (settings.autoScroll) chatMessages.scrollTop = chatMessages.scrollHeight;
+        setTimeout(() => div.querySelectorAll('pre code').forEach(b => Prism.highlightElement(b)), 50);
+    }
+
+    function removeTyping() {
+        document.getElementById('typing')?.remove();
+    }
+
+    function escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // Initialization
+    initWebSocket();
+    autoResizeTextarea();
+    updateSendButtonState();
+    loadchats();
+    loadchat(1); // Load default chat on start (optional)
 });
