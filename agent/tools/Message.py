@@ -1,8 +1,10 @@
 from tools.DB import DB
 import uuid
 from datetime import datetime
+from psycopg.rows import dict_row
 
 class Message:
+    @staticmethod
     def create_message(
         chat_id: int,
         role: str,
@@ -19,16 +21,77 @@ class Message:
             "created_at": datetime.utcnow().isoformat()
         }
 
-    def save_message(message: dict):
+    @staticmethod
+    async def save_message(chat_id: int, message: dict):
         """
         Save message into database.
         """
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    f"""UPDATE Chat SET updated_at = %s WHERE id = %s""",
+                    (datetime.utcnow().isoformat(), chat_id)
+                )
         
-        DB.add('MESSAGE', message)
+                await cursor.execute(
+                    f"""INSERT INTO Message
+                    (chat_id, role, created_at)
+                    VALUES
+                    (%s, %s, %s)
+                    RETURNING id""",
+                    (chat_id, message['role'], datetime.utcnow().isoformat())
+                )
 
-    def get_messages(chat_id: int) -> list:
-        """
-        Get all messages of a chat.
-        """
+                message_id = (await cursor.fetchone())['id']
 
-        return DB.get('MESSAGE', [('chat_id', '=', chat_id)])
+                if message['role'] == 'system':
+                    await cursor.execute(
+                        f"""INSERT INTO System_message
+                        (message_id, content)
+                        VALUES
+                        (%s, %s)""",
+                        (message_id, message['content'])
+                    )
+                elif message['role'] == 'user':
+                    await cursor.execute(
+                        f"""INSERT INTO User_message
+                        (message_id, content)
+                        VALUES
+                        (%s, %s)""",
+                        (message_id, message['content'])
+                    )
+                elif message['role'] == 'tool':
+                    await cursor.execute(
+                        f"""INSERT INTO Tool_message (message_id, tool_call_id, content) VALUES (%s, %s, %s)""",
+                        (message_id, message['content'], message['tool_call_id'])
+                    )
+                    await cursor.execute(
+                        f"""UPDATE Tool_call SET status = %s WHERE tool_call_id = %s""",
+                        (message['status'], message['tool_call_id'])
+                    )
+                elif message['role'] == 'assistant':
+                    await cursor.execute(
+                        f"""INSERT INTO Assistant_message
+                        (message_id, content)
+                        VALUES
+                        (%s, %s)""",
+                        (message_id, message['content'])
+                    )
+                    if message['reasoning_content'] is not None:
+                        await cursor.execute(
+                            f"""INSERT INTO Assistant_reasoning
+                            (message_id, content)
+                            VALUES
+                            (%s, %s)""",
+                            (message_id, message['reasoning_content'])
+                        )
+                    if message.get('tool_calls') is not None and len(message['tool_calls']) > 0:
+                        await cursor.executemany(
+                            f"""INSERT INTO Tool_call
+                            (message_id, tool_call_id, type, function_name, arguments, status)
+                            VALUES
+                            (%s, %s, %s, %s, %s, %s)""",
+                            [(message_id, tool['id'], tool['type'], tool['name'], tool['arguments'], None) for tool in message['tool_calls']]
+                        )
+
+        return message_id

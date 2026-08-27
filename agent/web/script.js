@@ -4,7 +4,7 @@ import Parser from './Parser.js';
 // ============================================
 // FAREED AI ASSISTANT - FRONTEND (Socket.IO)
 // ============================================
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = window.location.origin.slice(0, window.location.origin.lastIndexOf(':')) + ':5000' || 'http://localhost:5000';
 document.addEventListener('DOMContentLoaded', () => {
     const chatMessages = document.getElementById('chatMessages');
     const userInput = document.getElementById('userInput');
@@ -175,9 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function initWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const hostname = window.location.hostname || 'localhost';
-        const port = window.location.port || '5000';
         const wsUrl = `${BASE_URL}/chat`;
         
         socket = new WebSocket(wsUrl);
@@ -210,9 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (Parser.typingDiv == null) {
                         Parser.typingDiv = document.getElementById('typing');
-                    } else {
-                        Parser.parse(data.message)
                     }
+
+                    Parser.parse(data.message)
                     resetStreamTimeout();
                     
                 } else if (eventType === 'server_error') {
@@ -235,8 +232,14 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.onclose = () => {
             console.log('⚠️ WebSocket disconnected');
             addMessage('system', '⚠️ Connection closed');
+            // setTimeout(() => {
+            //     console.log("retrying WebSocket connection in 3 seconds...");
+            // }, 3000);
+            // initWebSocket()
         };
     }
+
+    window.initWebSocket = initWebSocket;
 
     function showTyping() {
 
@@ -281,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const res = await fetch(`${settings.baseUrl}/chats`, { method: 'POST' });
                 if (!res.ok) throw new Error('Failed to create chat');
                 const data = await res.json();
-                currentChatId = data.chat_id;
+                currentChatId = data.id;
                 if (socket?.connected) socket.emit('join_chat', { chat_id: currentChatId });
                 await loadchats();
             } catch (err) {
@@ -391,12 +394,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chatsList.innerHTML = '';
         chats.forEach(conv => {
             const card = document.createElement('div');
-            card.className = `chat-card${conv.chat_id === currentChatId ? ' active' : ''}`;
+            card.className = `chat-card${conv.id === currentChatId ? ' active' : ''}`;
             card.innerHTML = `
                 <div class="chat-title">${escapeHtml(conv.title || 'Untitled')}</div>
-                <div class="chat-meta"><span>${new Date(conv.updated).toLocaleDateString()}</span></div>
+                <div class="chat-meta"><span>${conv.updated_at}</span></div>
             `;
-            card.addEventListener('click', () => loadchat(conv.chat_id));
+            card.addEventListener('click', () => loadchat(conv.id));
             chatsList.appendChild(card);
         });
     }
@@ -409,18 +412,20 @@ document.addEventListener('DOMContentLoaded', () => {
             chatMessages.innerHTML = '';
             historyList.innerHTML = '';
             currentChatId = chatId;
-            if (data.messages?.length) {
-                data.messages.forEach(msg => {
+            if (data?.length) {
+                console.log("a")
+                for(const i in data) {
+                    let msg = data[i];
                     if (msg.role === 'user') {
                         addMessage('user', msg.content);
                         addToHistory('user', msg.content, '👤');
                     } else if (msg.role === 'assistant') {
-                        addMessage('ai', msg.content);
+                        addMessage('ai', msg.content, 0, true, i == data.length - 1);
                         addToHistory('assistant', msg.content, '🤖');
                     } else if (msg.role === 'system') {
                         addMessage('system', msg.content);
                     }
-                });
+                }
             } else {
                 addMessage('ai', "chat loaded. Ask me anything!");
             }
@@ -458,14 +463,23 @@ document.addEventListener('DOMContentLoaded', () => {
         header.closest('.history-item').classList.toggle('expanded');
     };
 
-    function addMessage(role, content, fileCount = 0) {
+    function addMessage(role, content, fileCount = 0, renderAtEnd = false, lastMessage = false) {
         const div = document.createElement('div');
         div.className = `message ${role}-message`;
         const headers = { 'user':'👤 You', 'ai':'🤖 Fareed', 'system':'⚙️ System' };
         let displayContent = content;
         if (fileCount > 0) displayContent += `<br><span class="opacity-75 fs-sm"><i class="bi bi-paperclip"></i> ${fileCount} file(s)</span>`;
-        div.innerHTML = `<div class="message-header">${headers[role] || role}</div><div class="message-content">${displayContent}</div>`;
-        chatMessages.appendChild(div);
+
+        // For ai messages, use Parser to render structured content (code blocks, images, etc.)
+        if (role === 'ai' && content) {
+            div.innerHTML = `<div class="message-header">${headers[role] || role}</div>`;
+            chatMessages.appendChild(div);
+            Parser.parseFull(content, div, renderAtEnd, lastMessage);
+        } else {
+            div.innerHTML = `<div class="message-header">${headers[role] || role}</div><div class="message-content">${displayContent}</div>`;
+            chatMessages.appendChild(div);
+        }
+
         if (settings.autoScroll) chatMessages.scrollTop = chatMessages.scrollHeight;
         setTimeout(() => div.querySelectorAll('pre code').forEach(b => Prism.highlightElement(b)), 50);
     }
@@ -484,5 +498,5 @@ document.addEventListener('DOMContentLoaded', () => {
     autoResizeTextarea();
     updateSendButtonState();
     loadchats();
-    loadchat(1); // Load default chat on start (optional)
+    // loadchat(1); // Load default chat on start (optional)
 });

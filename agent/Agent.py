@@ -12,6 +12,8 @@ import json
 from openai import OpenAI
 from langchain_core.tools import tool
 from pydantic import BaseModel
+import inspect
+
 
 load_dotenv()
 
@@ -79,8 +81,8 @@ models = {
 
 class Agent:
     global models
-    def _clear_reasoning_content(self):
-        for message in self.history:
+    def _clear_reasoning_content(history):
+        for message in history:
             if hasattr(message, 'reasoning_content'):
                 message.reasoning_content = None
             elif isinstance(message, dict):
@@ -88,7 +90,7 @@ class Agent:
 
     def chat(self, message):
         try:
-            self._clear_reasoning_content()
+            self._clear_reasoning_content(self.history)
 
             self.history.append({"role": "user", "content": message})
 
@@ -134,13 +136,13 @@ class Agent:
             print(f"\033[31mHistory: {self.history}\033[0m")
             print(f"\033[32mError: {e}\033[0m")
 
-    def stream(self, message):
+    async def stream(self, message, history):
         try:
-            self._clear_reasoning_content()
+            # self._clear_reasoning_content(history)
 
-            self.history.append({"role": "user", "content": message})
-
+            # self.history.append({"role": "user", "content": message})
             while True:
+                print(f"\033[36m({message, history})\033[0m")
 
                 content = []
                 tool_calls = []
@@ -148,7 +150,9 @@ class Agent:
                 for r in self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        *self.history
+                        # *self.history
+                        *history,
+                        ({"role": "user", "content": message})
                     ],
                     tools=self.tools_schema,
                     stream=True
@@ -156,7 +160,7 @@ class Agent:
                     if r.choices[0].finish_reason == 'stop': return
                     if r.choices[0].delta.tool_calls != None:
                         if r.choices[0].delta.tool_calls[0].function.name:
-                            yield "\n"
+                            # yield "\n"
                             tool = {
                                 'name': r.choices[0].delta.tool_calls[0].function.name,
                                 'arguments': [],
@@ -167,7 +171,7 @@ class Agent:
                         else:
                             tool['arguments'].append(r.choices[0].delta.tool_calls[0].function.arguments)
                     else:
-                        yield r.choices[0].delta.content
+                        yield {'type': 'message', 'content': r.choices[0].delta.content}
                         content.append(r.choices[0].delta.content)
                 content = ''.join(content)
                 tool_calls = [
@@ -186,12 +190,11 @@ class Agent:
                     'content': content,
                     'tool_calls': tool_calls if len(tool_calls) > 0 else None
                 }
-                self.history.append(msg)
+                # self.history.append(msg)
 
                 for tc in tool_calls:
                     tool_name = tc['name']
                     tool_args = json.loads(tc['arguments'])
-                    tool_args['id'] = tc['id']
                     result = None
                     try:
                         if tool_name not in self.tools_map:
@@ -203,17 +206,20 @@ class Agent:
                             result = tool.invoke(tool_args)
                         else:
                             result = tool(**tool_args)
+
+                        if inspect.isawaitable(result):
+                            result = await result
                     except Exception as e:
                         result = {"error": traceback.format_exc()}
 
-                    self.history.append({
-                        "role": "tool",
-                        "tool_call_id": tc['id'],
-                        "content": str(result),
-                    })
+                    # self.history.append({
+                    #     "role": "tool",
+                    #     "tool_call_id": tc['id'],
+                    #     "content": str(result),
+                    # })
+                    yield {'type': 'tool', "tool_call_id": tc['id'], "content": str(result)}
 
         except Exception as e:
-            print(f"\033[31mHistory: {self.history}\033[0m")
             print(f"\033[32mError: {e}\033[0m")
 
     def set_model(self, model):
@@ -262,15 +268,13 @@ Decision rules:
 
 You must format every response using ONLY these tags:
 
-- <*&TEXT&*> for text
+- <*&TEXT&*> for text and markdown using HTML tags
 - <*&CODE:filename=...:lang=...&*> for code
 - <*&COMMAND&*> for commands
 - <*&IMAGE&*> for images
-- <*&PDF&*> for PDF files
 - <*&AUDIO&*> for audio
 - <*&YOUTUBE&*> for YouTube embeds
 - <*&HOTANSWER&*> for hot answers
-- <*&HTML&*> for tags of text formating like: H1-6, ul, ol, li, table, coloring, etc...
 - <*&END&*> to end the response (required)
 
 Rules:
@@ -300,8 +304,7 @@ Examples:
 <*&YOUTUBE&*>https://www.youtube.com/embed/CG48pSyK8GU
 <*&END&*>
 
-<*&TEXT&*>Read the following list:
-<*&HTML&*><ol><li>item1</li><li>item2</li></ol>
+<*&TEXT&*>Read the following list:<ol><li>item1</li><li>item2</li></ol>
 <*&TEXT&*>Another text
 <*&END&*>
 """

@@ -5,20 +5,6 @@ from pydantic import BaseModel, Field
 from tools.time_utils import toUTC, fromUTC
 from langchain.tools import tool
 
-try:
-    DB.createTable('cron_jobs', [
-        'id INTEGER PRIMARY KEY AUTOINCREMENT',
-        'start_time DATETIME NOT NULL',
-        'dead_time DATETIME NOT NULL',
-        'importance TEXT NOT NULL DEFAULT "medium" CHECK(importance IN ("critical", "high", "medium", "low", "ignorable"))',
-        'title TEXT NOT NULL',
-        'prompt TEXT NOT NULL',
-        'on_pass_action TEXT NOT NULL DEFAULT "ask the human"',
-        'is_done BOOLEAN DEFAULT FALSE'
-    ])
-except Exception as e:
-    print(f"Error:", e)
-
 class Add(BaseModel):
     """Use it to add new cron job. Fill all the fields from user's answers. Never ever ask the agent in the prompt to response or wait for user input as agent will work silently. Tell it to exit at the end using bye()."""
     start_time: str = Field(..., description="The time when the job is scheduled to start after. Its value in formate '%Y-%m-%d %H:%M:%S'.")
@@ -65,10 +51,10 @@ class CronJob(DB):
         pass
 
     @tool(args_schema=Add)
-    def CronJob_add(start_time: str, dead_time: str, importance: str, title: str, prompt: str, on_pass_action: str,
+    async def CronJob_add(start_time: str, dead_time: str, importance: str, title: str, prompt: str, on_pass_action: str,
             can_be_done_early: bool = False):
         try:
-            return DB.add(CronJob.tbl, {
+            return await DB.add(CronJob.tbl, {
                 "start_time": toUTC(start_time),
                 "dead_time": toUTC(dead_time),
                 "importance": importance,
@@ -80,9 +66,9 @@ class CronJob(DB):
             return {'Error', e}
 
     @tool(args_schema=GetById)
-    def CronJob_getById(id: int):
+    async def CronJob_getById(id: int):
         try:
-            rows = DB.get(CronJob.tbl, [('id', '=', id)])
+            rows = await DB.get(CronJob.tbl, [('id', '=', id)])
             if not rows:
                 return None
             row = rows[0]
@@ -96,11 +82,11 @@ class CronJob(DB):
             return {'Error', e}
 
     @tool(args_schema=GetDayItems)
-    def CronJob_getDayItems(dayOffset: int = 0):
+    async def CronJob_getDayItems(dayOffset: int = 0):
         try:
             lower = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=dayOffset)
             upper = lower + timedelta(days=1)
-            rows = DB.get(CronJob.tbl, [('start_time', '>=', lower), ('dead_time', '<', dead_time)])
+            rows = await DB.get(CronJob.tbl, [('start_time', '>=', lower), ('dead_time', '<', dead_time)])
             result = []
             for r in rows:
                 r['start_time'] = datetime.fromisoformat(r['start_time'])
@@ -114,12 +100,12 @@ class CronJob(DB):
             return {'Error', e}
 
     @tool(args_schema=GetWeekItems)
-    def CronJob_getWeekItems(weekOffset: int = 0):
+    async def CronJob_getWeekItems(weekOffset: int = 0):
         try:
             today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             last_saturday = today - timedelta(days=(today.weekday() - 5) % 7) + timedelta(weeks=weekOffset)
             next_saturday = last_saturday + timedelta(days=7)
-            rows = DB.get(CronJob.tbl, [('start_time', '>=', last_saturday), ('dead_time', '<', next_saturday)])
+            rows = await DB.get(CronJob.tbl, [('start_time', '>=', last_saturday), ('dead_time', '<', next_saturday)])
             result = []
             for r in rows:
                 r['start_time'] = datetime.fromisoformat(r['start_time'])
@@ -133,13 +119,13 @@ class CronJob(DB):
             return {'Error', e}
 
     @tool(args_schema=GetMonthItems)
-    def CronJob_getMonthItems():
+    async def CronJob_getMonthItems():
         try:
             today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
             start = today.replace(day=1)
             last_day = calendar.monthrange(today.year, today.month)[1]
             end = today.replace(day=last_day) + timedelta(days=1)
-            rows = DB.get(CronJob.tbl, [('start_time', '>=', start), ('dead_time', '<', end)])
+            rows = await DB.get(CronJob.tbl, [('start_time', '>=', start), ('dead_time', '<', end)])
             result = []
             for r in rows:
                 r['start_time'] = datetime.fromisoformat(r['start_time'])
@@ -153,11 +139,11 @@ class CronJob(DB):
             return {'Error', e}
 
     @tool(args_schema=GetCustomItems)
-    def CronJob_getCustomItems(start: str, end: str):
+    async def CronJob_getCustomItems(start: str, end: str):
         try:
             start_dt = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
             end_dt = datetime.strptime(end, "%Y-%m-%d %H:%M:%S")
-            rows = DB.get(CronJob.tbl, [('start_time', '>=', toUTC(start_dt)), ('dead_time', '<', toUTC(end_dt))])
+            rows = await DB.get(CronJob.tbl, [('start_time', '>=', toUTC(start_dt)), ('dead_time', '<', toUTC(end_dt))])
             result = []
             for r in rows:
                 r['start_time'] = datetime.fromisoformat(r['start_time'])
@@ -171,10 +157,10 @@ class CronJob(DB):
             return {'Error', e}
 
     @tool(args_schema=Edit)
-    def CronJob_edit(id: int, start_time: str, dead_time: str, importance: str, title: str, prompt: str,
+    async def CronJob_edit(id: int, start_time: str, dead_time: str, importance: str, title: str, prompt: str,
              on_pass_action: str, can_be_done_early: bool = False):
         try:
-            DB.edit(CronJob.tbl, {
+            await DB.edit(CronJob.tbl, {
                 "start_time": toUTC(start_time),
                 "dead_time": toUTC(dead_time),
                 "importance": importance,

@@ -7,7 +7,6 @@ class AudioPlayer {
     }
 
     create() {
-
         const wrapper = document.createElement("div");
         wrapper.className = "audio-player";
 

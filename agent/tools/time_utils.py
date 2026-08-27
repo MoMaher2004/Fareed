@@ -37,7 +37,7 @@ def fromUTC(dt: datetime, timeZone: str = "Africa/Cairo") -> datetime:
 
     return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S")
 
-@tool
+# @tool
 def time():
     """Returns the current time as a string in formate "%Y-%m-%d %H:%M:%S". Used when current date and time are required. If you output to user, use a letteral format to be readable like: "It's three oclock PM on fifth of September" instead of numbers to be pronounced well."""
     # approval_requests[id] = Request('Get time', 'desc')

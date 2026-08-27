@@ -14,7 +14,7 @@ class Search(BaseModel):
     newsSearch: bool = Field(description="This field distinguish between normal search and news search. For news search its value is True")
 
 @tool(args_schema=Search)
-def search(
+async def search(
     query: str,
     region: str | None = None,
     safesearch: str = "off",
@@ -24,5 +24,5 @@ def search(
     backend: str = 'auto',
     newsSearch: bool = False,
 ) -> list[dict]:
-    if newsSearch: return DDGS().news(query=query, page=page, backend=backend, region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results)
+    if newsSearch: return await DDGS().news(query=query, page=page, backend=backend, region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results)
     else: return DDGS().text(query=query, page=page, backend=backend, region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results)

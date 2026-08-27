@@ -1,9 +1,9 @@
 class CodeViewer {
 
-    constructor(filename, language) {
+    constructor(filename, renderAtEnd = false) {
 
         this.filename = filename;
-        this.language = language;
+        this.renderAtEnd = renderAtEnd;
 
         this.code = "";
 
@@ -20,7 +20,6 @@ class CodeViewer {
 
                 <div class="code-info">
                     <span class="file-name">${this.filename}</span>
-                    <span class="language">${this.language}</span>
                 </div>
 
                 <div class="code-actions">
@@ -61,7 +60,13 @@ class CodeViewer {
 
         this.code += chunk;
 
-        this.render();
+        if(!this.renderAtEnd) this.render();
+    }
+
+    end() {
+        this.code = this.code.trim()
+
+        this.render()
     }
 
     render() {
@@ -153,8 +158,6 @@ class CodeViewer {
             this.expandIcon.className = "bi bi-arrows-fullscreen";
         }
     }
-
-    end() {}
 }
 
 export default CodeViewer;

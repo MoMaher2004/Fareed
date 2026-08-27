@@ -2,16 +2,12 @@ import CodeViewer from './CodeViewer.js';
 import TextViewer from './TextViewer.js';
 import HotAnswer from './HotAnswer.js';
 import YoutubeViewer from './YoutubeViewer.js';
+import ImageViewer from './ImageViewer.js';
 import AudioPlayer from './AudioPlayer.js';
+import CommandViewer from './CommandViewer.js';
 
 class Parser {
-    static blocks = [
-        {
-            type: "text",
-            attributes: {},
-            content: ""
-        }
-    ]
+    static blocks = []
 
     static tagName = ''
     static attributeName = ''
@@ -57,27 +53,43 @@ class Parser {
         Parser.attributeValue = "";
     }
 
-    static addBlock() {
+    static addBlock(renderAtEnd = false, lastMessage = false) {
         if (Parser.container) {
             Parser.container.end();
         }
 
         if (Parser.tagName.toLowerCase() == 'code') {
-            Parser.container = new CodeViewer(Parser.attributes['filename'], Parser.attributes['language'])
+            Parser.container = new CodeViewer(Parser.attributes['filename'], renderAtEnd)
 
             Parser.typingDiv.appendChild(
                 Parser.container.element
             );
         }
         else if (Parser.tagName.toLowerCase() == 'hotanswer') {
-            Parser.container = new HotAnswer()
-
-            document.getElementById('hotAnswers').appendChild(
-                Parser.container.element
-            );
+            Parser.container = new HotAnswer(renderAtEnd, lastMessage)
+            
+            if ((!renderAtEnd || lastMessage && renderAtEnd)){
+                document.getElementById('hotAnswers').appendChild(
+                    Parser.container.element
+                );
+            }
         }
         else if (Parser.tagName.toLowerCase() == 'youtube') {
             Parser.container = new YoutubeViewer()
+
+            Parser.typingDiv.appendChild(
+                Parser.container.element
+            );
+        }
+        else if (Parser.tagName.toLowerCase() == 'image') {
+            Parser.container = new ImageViewer()
+
+            Parser.typingDiv.appendChild(
+                Parser.container.element
+            );
+        }
+        else if (Parser.tagName.toLowerCase() == 'command') {
+            Parser.container = new CommandViewer(renderAtEnd)
 
             Parser.typingDiv.appendChild(
                 Parser.container.element
@@ -91,7 +103,7 @@ class Parser {
             );
         }
         else /*if (Parser.tagName.toLowerCase() == 'text')*/ {
-            Parser.container = new TextViewer()
+            Parser.container = new TextViewer(renderAtEnd)
 
             Parser.typingDiv.appendChild(
                 Parser.container.element
@@ -114,108 +126,137 @@ class Parser {
         Parser.updateStatus("A");
     }
 
-    static parse(c) {
-        Parser.fullStream += c
+    static parse(chunck, renderAtEnd = false, lastMessage = false) {
+        Parser.fullStream += chunck
 
-        // Status A
-        if (Parser.status === "A") {
-            if (c === "<") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("B");
-            } else {
-                Parser.candinateTagIsContent(c);
+        if (Parser.blocks.length == 0)
+            Parser.addBlock(renderAtEnd, lastMessage)
+
+        for(const c of chunck){
+            // Status A
+            if (Parser.status === "A") {
+                if (c === "<") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("B");
+                } else {
+                    Parser.candinateTagIsContent(c);
+                }
+            }
+
+            // Status B
+            else if (Parser.status === "B") {
+                if (c === "*") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("C");
+                } else {
+                    Parser.candinateTagIsContent(c);
+                }
+            }
+
+            // Status C
+            else if (Parser.status === "C") {
+                if (c === "&") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("D");
+                } else {
+                    Parser.candinateTagIsContent(c);
+                }
+            }
+
+            // Status D
+            else if (Parser.status === "D") {
+                if (c === "&") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("G");
+                }
+                else if (c === ":") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("E");
+                }
+                else {
+                    Parser.addToCandinateTag(c);
+                    Parser.addToTagName(c);
+                    Parser.updateStatus("D");
+                }
+            }
+
+            // Status E
+            else if (Parser.status === "E") {
+                if (c === "=") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("F");
+                }
+                else {
+                    Parser.addToCandinateTag(c);
+                    Parser.addToAttributeName(c);
+                    Parser.updateStatus("E");
+                }
+            }
+
+            // Status F
+            else if (Parser.status === "F") {
+                if (c === "&") {
+                    Parser.addToCandinateTag(c);
+                    Parser.addAttribute();
+                    Parser.updateStatus("G");
+                }
+                else if (c === ":") {
+                    Parser.addToCandinateTag(c);
+                    Parser.addAttribute();
+                    Parser.updateStatus("E");
+                }
+                else {
+                    Parser.addToCandinateTag(c);
+                    Parser.addToAttributeValue(c);
+                    Parser.updateStatus("F");
+                }
+            }
+
+            // Status G
+            else if (Parser.status === "G") {
+                if (c === "*") {
+                    Parser.addToCandinateTag(c);
+                    Parser.updateStatus("H");
+                }
+                else {
+                    Parser.candinateTagIsContent(c);
+                }
+            }
+
+            // Status H
+            else if (Parser.status === "H") {
+                if (c === ">") {
+                    Parser.addBlock(renderAtEnd, lastMessage);
+                }
+                else {
+                    Parser.candinateTagIsContent(c);
+                }
             }
         }
+    }
 
-        // Status B
-        else if (Parser.status === "B") {
-            if (c === "*") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("C");
-            } else {
-                Parser.candinateTagIsContent(c);
-            }
-        }
+    static reset() {
+        Parser.blocks = [];
+        Parser.tagName = '';
+        Parser.attributeName = '';
+        Parser.attributeValue = '';
+        Parser.attributes = {};
+        Parser.status = 'A';
+        Parser.fullStream = '';
+        Parser.candinateTag = '';
+        Parser.container = null;
+        // typingDiv is not reset here — caller sets it
+    }
 
-        // Status C
-        else if (Parser.status === "C") {
-            if (c === "&") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("D");
-            } else {
-                Parser.candinateTagIsContent(c);
-            }
+    static parseFull(content, container, renderAtEnd = false, lastMessage = false) {
+        Parser.reset();
+        Parser.typingDiv = container;
+        Parser.parse(content, renderAtEnd, lastMessage);
+        // Finalize the last open block
+        if (Parser.container) {
+            Parser.container.end();
         }
-
-        // Status D
-        else if (Parser.status === "D") {
-            if (c === "&") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("G");
-            }
-            else if (c === ":") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("E");
-            }
-            else {
-                Parser.addToCandinateTag(c);
-                Parser.addToTagName(c);
-                Parser.updateStatus("D");
-            }
-        }
-
-        // Status E
-        else if (Parser.status === "E") {
-            if (c === "=") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("F");
-            }
-            else {
-                Parser.addToCandinateTag(c);
-                Parser.addToAttributeName(c);
-                Parser.updateStatus("E");
-            }
-        }
-
-        // Status F
-        else if (Parser.status === "F") {
-            if (c === "&") {
-                Parser.addToCandinateTag(c);
-                Parser.addAttribute();
-                Parser.updateStatus("G");
-            }
-            else if (c === ":") {
-                Parser.addToCandinateTag(c);
-                Parser.addAttribute();
-                Parser.updateStatus("E");
-            }
-            else {
-                Parser.addToCandinateTag(c);
-                Parser.addToAttributeValue(c);
-                Parser.updateStatus("F");
-            }
-        }
-
-        // Status G
-        else if (Parser.status === "G") {
-            if (c === "*") {
-                Parser.addToCandinateTag(c);
-                Parser.updateStatus("H");
-            }
-            else {
-                Parser.candinateTagIsContent(c);
-            }
-        }
-
-        // Status H
-        else if (Parser.status === "H") {
-            if (c === ">") {
-                Parser.addBlock();
-            }
-            else {
-                Parser.candinateTagIsContent(c);
-            }
-        }
+        return container;
     }
 }
 

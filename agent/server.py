@@ -1,16 +1,34 @@
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env (DB credentials, API keys) before any module reads os.getenv()
 
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import json
-from Agent import Agent, tools_map, tools_schema, models
+from llms.LLMClient import LLMClient
 from tools.Message import Message
 from tools.Chat import Chat
 import asyncio
+from fastapi.responses import FileResponse
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from utils.system_message import system_message
+from tools.DB import DB
+import traceback
 
-# Initialize agent and app
-agent = Agent(models["deepseek-chat"], tools_map, tools_schema)
+# Initialize llm_client and app
+llm_client = LLMClient(model_name="deepseek-v4-flash")
 app = FastAPI()
+
+
+@app.on_event("startup")
+async def startup():
+    await DB.init()
+
+
+BASE_DIR = Path(__file__).resolve().parent
+
 
 # CORS middleware
 app.add_middleware(
@@ -22,21 +40,123 @@ app.add_middleware(
 )
 
 # Global state
-user_sessions = {}  # Maps client_id -> room_name
+user_sessions = {}  # Maps client_id -> chat_id
 active_connections = {}  # Maps client_id -> WebSocket
+histories = {}  # Maps chat_id -> {messages: [(role, content)], summary, locked: False, title, tool_requests: {tool_call_id: {name, args, type}}}
 
-def room_name(chat_id):
-    return f"chat_{chat_id}"
 
-async def broadcast_to_room(room, event_type, data):
-    """Broadcast a message to all clients in a room"""
+async def broadcast_to_chat(chat_id, event_type, data):
+    """Broadcast a message to all clients in a chat"""
     message = {"type": event_type, **data}
     for client_id, ws in list(active_connections.items()):
-        if user_sessions.get(client_id) == room:
+        if user_sessions.get(client_id) == chat_id:
             try:
                 await ws.send_json(message)
             except Exception as e:
                 print(f"Error broadcasting to {client_id}: {e}")
+
+
+async def create_chat():
+    """Create a new chat, cache it and return its ID"""
+    chat = await Chat.add_chat()
+    histories[chat["id"]] = {
+        "messages": [],
+        "summary": None,
+        "locked": False,
+        "title": None,
+        "tool_requests": {},
+    }
+    return chat["id"]
+
+async def start_chat_loop(chat_id: str):
+    exit_loop = False
+    while exit_loop == False:
+        response_message = []
+        reasoning_message = []
+        async for chunk in llm_client.stream(
+            [system_message(), *histories[chat_id]["messages"]]
+        ):
+            """
+            chunk types: tool_calls, message, reasoning, error, end
+            """
+            if chunk.get("type") == "tool_calls":
+                assistant_message = {
+                    'role': 'assistant',
+                    'content': ''.join(response_message) if len(response_message) > 0 else None,
+                    'reasoning': ''.join(reasoning_message) if len(reasoning_message) > 0 else None,
+                    'tool_calls': chunk.get("tool_calls"),
+                }
+
+                await Message.save_message(chat_id, assistant_message)
+                histories[chat_id]["messages"].append(assistant_message)
+
+                for tool_call in chunk.get("tool_calls"):
+                    print("\033[34m",tool_call,"\033[0m")
+                    result = await Tool.request_tool(
+                        modelName=llm_client.model.name,
+                        tool_call_id=tool_call["id"],
+                        tool=tool_call["name"],
+                        arguments=json.loads(tool_call["arguments"]),
+                    )
+                    print("\033[36m",result,"\033[0m")
+
+                    if result.get('type') == "tool_response":
+                        if result.get('status') != 'waiting approval':
+                            await Message.save_message(chat_id, assistant_message)
+                            histories[chat_id]["messages"].append(
+                                {
+                                    "role": "tool",
+                                    "content": result.get("content") if result.get("status") == 'success' else 'denied' if result.get("status") == 'denied' else f"error: {result.get('content')}",
+                                    "tool_call_id": tool_call_id,
+                                }
+                            )
+                        else:
+                            histories[chat_id]["tool_requests"][tool_call["id"]] = {
+                                    "name": tool_call["name"],
+                                    "arguments": json.loads(tool_call["arguments"]),
+                                    "type": tool_call["type"],
+                                }
+                            await broadcast_to_chat(
+                                chat_id, "server_request_tool", {"tool": result.get('tool'), "options": result.get('options')}
+                            )
+                            await asyncio.sleep(0)
+                            exit_loop = True
+                    
+            elif chunk.get("type") == "message":
+                response_message += chunk["content"]
+                await broadcast_to_chat(
+                    chat_id, "server_message", {"content": chunk["content"]}
+                )
+                await asyncio.sleep(0)
+            elif chunk.get("type") == "reasoning":
+                reasoning_message += chunk["content"]
+                await broadcast_to_chat(
+                    chat_id, "server_reasoning", {"content": chunk["content"]}
+                )
+                await asyncio.sleep(0)
+            elif chunk.get("type") == "error":
+                await broadcast_to_chat(
+                    chat_id, "server_error", {"content": chunk["content"]}
+                )
+                await asyncio.sleep(0)
+            elif chunk.get("type") == "end":
+                assistant_message = {
+                    'role': 'assistant',
+                    'content': ''.join(response_message) if len(response_message) > 0 else None,
+                    'reasoning_content': ''.join(reasoning_message) if len(reasoning_message) > 0 else None,
+                }
+
+                await Message.save_message(chat_id, assistant_message)
+                histories[chat_id]["messages"].append(assistant_message)
+                histories[chat_id]['locked'] = False
+                exit_loop = True
+            else:
+                await broadcast_to_chat(
+                    chat_id, "server_error", {"content": "chunk type is unknown"}
+                )
+                await asyncio.sleep(0)
+                exit_loop = True
+
 
 # WebSocket endpoint
 @app.websocket("/chat")
@@ -44,146 +164,138 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     client_id = id(websocket)
     active_connections[client_id] = websocket
-    
-    print(f"\033[32mClient connected: {client_id}\033[0m")
-    
+
     try:
         while True:
             data = await websocket.receive_json()
             event_type = data.get("type")
-            
+
             if event_type == "join_chat":
-                # Handle join_chat event
                 chat_id = data.get("chat_id")
-                room = room_name(chat_id)
-                
-                if client_id in user_sessions:
-                    del user_sessions[client_id]
-                
-                user_sessions[client_id] = room
-                print(f"\033[32mClient joined room: {room}\033[0m")
-            
-            elif event_type == "client_message":
-                # Handle client_message event
+                if chat_id not in histories:
+                    print(chat_id)
+                    chat = await Chat.get_chat(chat_id)
+                    if chat is None:
+                        print(chat)
+                        await websocket.send_json(
+                            {"type": "error", "message": "Chat not found"}
+                        )
+                    else:
+                        histories[chat_id] = {
+                            "messages": [
+                                (m["role"], m["content"]) for m in chat["messages"]
+                            ],
+                            "summary": chat["summary"] or None,
+                            "locked": len(chat.get("tool_requests", {})) > 0,
+                            "title": chat["title"],
+                            "tool_requests": chat.get("tool_requests", {}),
+                        }
+                        user_sessions[client_id] = chat_id
+                        await websocket.send_json(
+                            {
+                                "type": "history",
+                                "messages": histories[chat_id]["messages"],
+                                "locked": False,
+                            }
+                        )
+                else:
+                    user_sessions[client_id] = chat_id
+                    await websocket.send_json(
+                        {
+                            "type": "history",
+                            "messages": histories[chat_id]["messages"],
+                            "locked": histories[chat_id]["locked"],
+                        }
+                    )
+
+            elif event_type == "tool_request":
                 if client_id not in user_sessions:
-                    await websocket.send_json({
-                        "type": "server_error",
-                        "error": "You must join a chat before sending messages."
-                    })
-                    await asyncio.sleep(0)
+                    await websocket.send_json(
+                        {"type": "error", "message": "You must join a chat first"}
+                    )
                     continue
-                
-                message = data.get("message")
-                chat_id = data.get("chat_id")
-                is_system_message = data.get("is_system_message", False)
-                room = user_sessions[client_id]
-                
-                # Save user message
-                formated_message = Message.create_message(
-                    chat_id=chat_id,
-                    role="system" if is_system_message else "user",
-                    content=message
+                tool_call_id = data.get("tool_call_id")
+                request = histories[user_sessions[client_id]]["tool_requests"][tool_call_id]
+                action = data.get("action")
+                result = await Tool.process_tool_request(tool_call_id, action, request)
+                await Message.save_message(chat_id, assistant_message)
+                histories[chat_id]["messages"].append(
+                    {
+                        "role": "tool",
+                        "content": result.get("content") if result.get("status") == 'success' else 'denied' if result.get("status") == 'denied' else f"error: {result.get('content')}",
+                        "tool_call_id": tool_call_id,
+                    }
                 )
-                Message.save_message(formated_message)
-                
-                print(f"\033[34mReceived message for chat {chat_id}: {formated_message}\033[0m")
-                
-                # Stream response chunks to room
-                response_message = ""
-                # for chunk in agent.stream(message):
-                for chunk in """<*&TEXT&*>Here's a combined test output for you:
-
-<h1>Fareed Assistant - Tag Testing Report</h1>
-<ul>
-<li><strong>Text tag:</strong> This is a plain text block for testing purposes.</li>
-<li><strong>Code tag:</strong> Below is a sample Python script.</li>
-<li><strong>Command tag:</strong> Then a command to run it.</li>
-<li><strong>Image & PDF & Audio & YouTube:</strong> Also included.</li>
-<li><strong>Hot Answers:</strong> Quick choices at the end.</li>
-</ul>
-
-<*&CODE:filename=test_script.py:lang=python&*>def greet(name):
-    print(f"Hello, !")
-    
-def add(a, b):
-    return a + b
-
-if __name__ == "__main__":
-    greet("Fareed")
-    result = add(10, 20)
-    print(f"Result:")
-    # This is a test file for tag compatibility
-    # Checking all possible tag types
-
-<*&COMMAND&*>python3 test_script.py --verbose --output report.html
-
-<*&TEXT&*>Here's a sample image placeholder:
-<*&IMAGE&*>
-
-<*&TEXT&*>And a PDF document preview:
-<*&PDF&*>
-
-<*&TEXT&*>Listen to this audio sample:
-<*&AUDIO&*>http://commondatastorage.googleapis.com/codeskulptor-assets/Evillaugh.ogg
-
-<*&TEXT&*>Watch this video tutorial:
-<*&YOUTUBE&*>https://www.youtube.com/watch?v=DQkCIxnkOyk
-
-<*&HTML&*><table border="1" cellpadding="5">
-<tr><th>Tag</th><th>Status</th><th>Notes</th></tr>
-<tr><td>TEXT</td><td>✅</td><td>Plain text content</td></tr>
-<tr><td>CODE</td><td>✅</td><td>Code with filename & lang</td></tr>
-<tr><td>COMMAND</td><td>✅</td><td>Shell command</td></tr>
-<tr><td>IMAGE</td><td>✅</td><td>Image placeholder</td></tr>
-<tr><td>PDF</td><td>✅</td><td>PDF preview</td></tr>
-<tr><td>AUDIO</td><td>✅</td><td>Audio player</td></tr>
-<tr><td>YOUTUBE</td><td>✅</td><td>YouTube embed</td></tr>
-<tr><td>HTML</td><td>✅</td><td>HTML formatting tags</td></tr>
-<tr><td>HOTANSWER</td><td>✅</td><td>Quick answer buttons</td></tr>
-</table>
-
-<*&TEXT&*>This concludes the full tag compatibility test. All available content type tags have been tested and rendered successfully. The system supports text, code blocks with syntax highlighting, terminal commands, images, PDF documents, audio playback, YouTube video embeds, HTML formatting, and hot answer buttons for quick interactions. Total test coverage is complete with all 9 tag types verified.
-
-<*&HOTANSWER&*>Re-run Test
-<*&HOTANSWER&*>View Details
-<*&HOTANSWER&*>Export Results
-<*&END&*>""":
-                    response_message += chunk
-                    await broadcast_to_room(room, "server_message", {
-                        "chat_id": chat_id,
-                        "message": chunk
-                    })
+                del histories[user_sessions[client_id]]["tool_requests"][tool_call_id]
+                await start_chat_loop(chat_id)
+            elif event_type == "client_message":
+                chat_id = None
+                if client_id not in user_sessions:
+                    chat_id = await create_chat()
                     await asyncio.sleep(0)
-                
-                # Save assistant message
-                formated_message = Message.create_message(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content=response_message
-                )
-                Message.save_message(formated_message)
-    
+                    user_sessions[client_id] = chat_id
+                    await websocket.send_json({"type": "chat_created", "chat_id": str(chat_id)})
+                else:
+                    chat_id = user_sessions[client_id]
+
+                if histories[chat_id]["locked"]:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Chat is locked. No further messages can be sent.",
+                        }
+                    )
+                    continue
+
+                histories[chat_id]['locked'] = True
+                message = data.get("message")
+                is_system_message = data.get("is_system_message", False)
+
+                formated_message = {
+                    "role": "system" if is_system_message else "user",
+                    "content": message,
+                }
+                await Message.save_message(chat_id, formated_message)
+                histories[chat_id]["messages"].append(formated_message)
+
+                # summarize chat
+                await start_chat_loop(chat_id)
+
     except Exception as e:
-        print(f"WebSocket error: {e}")
-    
+        traceback.print_exc()
     finally:
         if client_id in user_sessions:
             del user_sessions[client_id]
         if client_id in active_connections:
             del active_connections[client_id]
-        print(f"\033[31mClient disconnected: {client_id}\033[0m")
 
 # REST endpoints
 @app.get("/chats")
 async def get_chats():
-    chats = Chat.get_chats()
+    chats = await Chat.get_chats()
     return JSONResponse(chats)
+
 
 @app.get("/chats/{chat_id}")
 async def get_chat(chat_id: int):
-    messages = Message.get_messages(chat_id)
+    messages = await Message.get_messages(chat_id)
     return JSONResponse(messages)
+
+
+@app.post("/chats")
+async def add_chat():
+    chat = await Chat.add_chat()
+    return JSONResponse(chat)
+
+
+@app.get("/")
+async def ui():
+    return FileResponse(BASE_DIR / "web" / "index.html")
+
+
+app.mount("/", StaticFiles(directory="web"), name="web")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
+
+    uvicorn.run("server:app", host="0.0.0.0", port=5000, log_level="info")

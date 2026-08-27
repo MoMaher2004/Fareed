@@ -1,6 +1,7 @@
 class TextViewer {
 
-    constructor() {
+    constructor(renderAtEnd = false) {
+        this.renderAtEnd = renderAtEnd;
         this.text = "";
         this.element = this.create();
     }
@@ -21,14 +22,16 @@ class TextViewer {
 
         this.text += chunk;
 
-        this.render();
+        if(!this.renderAtEnd) this.render();
     }
 
     render() {
         this.body.innerHTML = this.text;
     }
 
-    end() {}
+    end() {
+        if (this.renderAtEnd) this.render();
+    }
 }
 
 export default TextViewer;

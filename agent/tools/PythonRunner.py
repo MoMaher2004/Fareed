@@ -36,11 +36,11 @@ class PythonRunner:
         pass
 
     @tool(args_schema=CreateNewRunner)
-    def createNewRunner(details: str) -> str:
+    async def createNewRunner(details: str) -> str:
         if len(PythonRunner.runners) >= 4:
             return "Error: Maximum number of runners reached. Please stop an existing runner before creating a new one."
         try:
-            p = subprocess.Popen(
+            p = await subprocess.Popen(
                 [
                     "docker", "run",
                     "-i",
@@ -102,7 +102,7 @@ class PythonRunner:
             return f"Error: {e}"
 
     @tool(args_schema=ExecuteCode)
-    def executeCode(idx: int, code: str) -> dict:
+    async def executeCode(idx: int, code: str) -> dict:
         if idx >= len(PythonRunner.runners):
             return "Error: Runner does not exist."
         p = PythonRunner.runners[idx]['process']
@@ -133,8 +133,8 @@ class PythonRunner:
             code = prepare_code(code, marker)
 
             # p.stdin.write(code)
-            p.stdin.write(base64.b64encode(code.encode()).decode() + "\n__RUN__\n")
-            p.stdin.flush()
+            await p.stdin.write(base64.b64encode(code.encode()).decode() + "\n__RUN__\n")
+            await p.stdin.flush()
 
             # code_output = []
 
@@ -196,12 +196,12 @@ class PythonRunner:
             return str(e)
 
     @tool(args_schema=StopRunner)
-    def stopRunner(idx: int) -> str:
+    async def stopRunner(idx: int) -> str:
         try:
             if idx >= len(PythonRunner.runners):
                 return "Error: Runner does not exist."
             if PythonRunner.runners[idx]['process']:
-                PythonRunner.runners[idx]['process'].terminate()
+                await PythonRunner.runners[idx]['process'].terminate()
                 del PythonRunner.runners[idx]
                 return f"Runner is stopped successfully."
         except Exception as e:

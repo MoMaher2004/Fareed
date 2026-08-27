@@ -1,0 +1,89 @@
+.command-viewer {
+    border: 1px solid #333;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #1e1e1e;
+    margin-top: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    position: relative;
+}
+
+/* HEADER */
+.command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #252526;
+    border-bottom: 1px solid #333;
+    color: #ccc;
+}
+
+.command-info {
+    display: flex;
+    gap: 10px;
+}
+
+.file-name {
+    color: #fff;
+    font-weight: bold;
+}
+
+.language {
+    color: #999;
+}
+
+.command-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+}
+
+.icon-btn:hover {
+    color: white;
+}
+
+/* BODY - IMPORTANT FIX */
+.command-body {
+    display: block;
+    max-height: 300px;
+    overflow: auto;
+}
+
+/* EACH LINE = GRID ROW */
+.command-line {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    align-items: start;
+}
+
+/* LINE NUMBER */
+.line-num {
+    text-align: right;
+    padding-right: 10px;
+    color: #666;
+    user-select: none;
+}
+
+/* CODE TEXT */
+.line-command {
+    white-space: pre;
+    color: #d4d4d4;
+}
+
+/* EXPAND */
+.command-body.expanded {
+    max-height: none;
+}
+
+/* SYNTAX */
+.kw { color: #c586c0; }
+.str { color: #ce9178; }
+.com { color: #6a9955; }
+.num { color: #b5cea8; }

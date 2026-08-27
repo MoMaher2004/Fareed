@@ -1,11 +1,14 @@
 class HotAnswer {
 
-    constructor() {
+    constructor(renderAtEnd = false, lastMessage = false) {
+        this.renderAtEnd = renderAtEnd;
+        this.lastMessage = lastMessage;
         this.text = "";
         this.element = this.create();
     }
 
     create() {
+        if (!(!this.renderAtEnd || this.lastMessage && this.renderAtEnd)) return undefined
         const button = document.createElement("button");
 
         button.className = "btn-suggestion";
@@ -21,7 +24,7 @@ class HotAnswer {
     }
 
     append(chunk) {
-
+        if (!(!this.renderAtEnd || this.lastMessage && this.renderAtEnd)) return
         this.text += chunk;
 
         this.render();
