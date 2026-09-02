@@ -2,6 +2,7 @@ from tools.DB import DB
 import uuid
 from datetime import datetime
 from psycopg.rows import dict_row
+from termcolor import cprint
 
 class Message:
     @staticmethod
@@ -26,6 +27,7 @@ class Message:
         """
         Save message into database.
         """
+        cprint(message, "green")
         async with DB.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(
@@ -63,7 +65,7 @@ class Message:
                 elif message['role'] == 'tool':
                     await cursor.execute(
                         f"""INSERT INTO Tool_message (message_id, tool_call_id, content) VALUES (%s, %s, %s)""",
-                        (message_id, message['content'], message['tool_call_id'])
+                        (message_id, message['tool_call_id'], message['content'])
                     )
                     await cursor.execute(
                         f"""UPDATE Tool_call SET status = %s WHERE tool_call_id = %s""",
@@ -77,7 +79,7 @@ class Message:
                         (%s, %s)""",
                         (message_id, message['content'])
                     )
-                    if message['reasoning_content'] is not None:
+                    if message.get('reasoning_content') is not None:
                         await cursor.execute(
                             f"""INSERT INTO Assistant_reasoning
                             (message_id, content)
@@ -86,12 +88,13 @@ class Message:
                             (message_id, message['reasoning_content'])
                         )
                     if message.get('tool_calls') is not None and len(message['tool_calls']) > 0:
+                        print("\033[36m",message['tool_calls'],"\033[0m")
                         await cursor.executemany(
                             f"""INSERT INTO Tool_call
-                            (message_id, tool_call_id, type, function_name, arguments, status)
+                            (assistant_message_id, tool_call_id, type, function_name, arguments, status)
                             VALUES
                             (%s, %s, %s, %s, %s, %s)""",
-                            [(message_id, tool['id'], tool['type'], tool['name'], tool['arguments'], None) for tool in message['tool_calls']]
+                            [(message_id, tool['id'], tool['type'], tool['name'], str(tool['arguments']), None) for tool in message['tool_calls']]
                         )
 
         return message_id

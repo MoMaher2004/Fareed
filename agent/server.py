@@ -16,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from utils.system_message import system_message
 from tools.DB import DB
 import traceback
+from tools.Tool import Tool
+from termcolor import cprint
 
 # Initialize llm_client and app
 llm_client = LLMClient(model_name="deepseek-v4-flash")
@@ -91,25 +93,27 @@ async def start_chat_loop(chat_id: str):
                 histories[chat_id]["messages"].append(assistant_message)
 
                 for tool_call in chunk.get("tool_calls"):
-                    print("\033[34m",tool_call,"\033[0m")
                     result = await Tool.request_tool(
                         modelName=llm_client.model.name,
                         tool_call_id=tool_call["id"],
-                        tool=tool_call["name"],
-                        arguments=json.loads(tool_call["arguments"]),
+                        tool_name=tool_call["name"],
+                        arguments=(
+                            json.loads(tool_call["arguments"])
+                            if isinstance(tool_call["arguments"], str)
+                            else tool_call["arguments"]
+                        ),
                     )
-                    print("\033[36m",result,"\033[0m")
 
                     if result.get('type') == "tool_response":
                         if result.get('status') != 'waiting approval':
-                            await Message.save_message(chat_id, assistant_message)
-                            histories[chat_id]["messages"].append(
-                                {
+                            tool_message = {
                                     "role": "tool",
                                     "content": result.get("content") if result.get("status") == 'success' else 'denied' if result.get("status") == 'denied' else f"error: {result.get('content')}",
-                                    "tool_call_id": tool_call_id,
+                                    "tool_call_id": tool_call["id"],
+                                    "status": result.get('status')
                                 }
-                            )
+                            await Message.save_message(chat_id, tool_message)
+                            histories[chat_id]["messages"].append(tool_message)
                         else:
                             histories[chat_id]["tool_requests"][tool_call["id"]] = {
                                     "name": tool_call["name"],
@@ -145,7 +149,8 @@ async def start_chat_loop(chat_id: str):
                     'content': ''.join(response_message) if len(response_message) > 0 else None,
                     'reasoning_content': ''.join(reasoning_message) if len(reasoning_message) > 0 else None,
                 }
-
+                
+                cprint("#3", "red")
                 await Message.save_message(chat_id, assistant_message)
                 histories[chat_id]["messages"].append(assistant_message)
                 histories[chat_id]['locked'] = False
@@ -173,10 +178,8 @@ async def websocket_endpoint(websocket: WebSocket):
             if event_type == "join_chat":
                 chat_id = data.get("chat_id")
                 if chat_id not in histories:
-                    print(chat_id)
                     chat = await Chat.get_chat(chat_id)
                     if chat is None:
-                        print(chat)
                         await websocket.send_json(
                             {"type": "error", "message": "Chat not found"}
                         )
