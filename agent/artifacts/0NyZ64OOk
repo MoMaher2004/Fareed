@@ -1,0 +1,12 @@
+This is a test artifact created for research purposes.
+
+Here is some sample content to verify the artifact creation and retrieval flow works correctly.
+
+Title: Artifact Research Test
+Author: Mohamed Maher
+Date: 2025
+
+Key points:
+1. Artifacts help store large documents outside the context.
+2. They can be retrieved later using their ID.
+3. This reduces context usage for large content.

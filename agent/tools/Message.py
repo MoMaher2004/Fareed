@@ -27,7 +27,6 @@ class Message:
         """
         Save message into database.
         """
-        cprint(message, "green")
         async with DB.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
                 await cursor.execute(
@@ -68,8 +67,8 @@ class Message:
                         (message_id, message['tool_call_id'], message['content'])
                     )
                     await cursor.execute(
-                        f"""UPDATE Tool_call SET status = %s WHERE tool_call_id = %s""",
-                        (message['status'], message['tool_call_id'])
+                        f"""UPDATE Tool_call SET status = %s, full_content = %s WHERE tool_call_id = %s""",
+                        (message['status'], message.get('full_content') or '', message['tool_call_id'])
                     )
                 elif message['role'] == 'assistant':
                     await cursor.execute(
@@ -79,16 +78,15 @@ class Message:
                         (%s, %s)""",
                         (message_id, message['content'])
                     )
-                    if message.get('reasoning_content') is not None:
+                    if message.get('reasoning') is not None:
                         await cursor.execute(
                             f"""INSERT INTO Assistant_reasoning
                             (message_id, content)
                             VALUES
                             (%s, %s)""",
-                            (message_id, message['reasoning_content'])
+                            (message_id, message['reasoning'])
                         )
                     if message.get('tool_calls') is not None and len(message['tool_calls']) > 0:
-                        print("\033[36m",message['tool_calls'],"\033[0m")
                         await cursor.executemany(
                             f"""INSERT INTO Tool_call
                             (assistant_message_id, tool_call_id, type, function_name, arguments, status)

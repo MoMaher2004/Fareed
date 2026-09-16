@@ -3,7 +3,10 @@ import uuid
 from datetime import datetime
 from tools import time_utils, Message
 from tools.Message import Message
+import json
 from psycopg.rows import dict_row
+import ast
+from termcolor import cprint
 
 class Chat:
     async def get_chats() -> list:
@@ -11,7 +14,43 @@ class Chat:
         Get all chats
         """
 
-        return await DB.get('CHAT')
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    '''
+                    SELECT
+                        c.id,
+                        COALESCE(
+                            c.title,
+                            LEFT(
+                                (
+                                    SELECT u.content
+                                    FROM Message m
+                                    LEFT JOIN user_message u ON m.id = u.message_id
+                                    WHERE m.chat_id = c.id
+                                    AND m.role = 'user'
+                                    ORDER BY m.created_at ASC
+                                    LIMIT 1
+                                ),
+                                50
+                            ) || '...'
+                        ) AS title,
+                        c.summary,
+                        c.created_at,
+                        c.updated_at
+                    FROM Chat c
+                    ORDER BY c.updated_at DESC
+                    ''',
+                    ()
+                )
+
+                chats = await cursor.fetchall()
+                for c in chats:
+                    c["id"] = str(c["id"])
+                    c["created_at"] = str(c["created_at"])
+                    c["updated_at"] = str(c["updated_at"])
+        return chats
+
 
     async def add_chat() -> dict:
         """
@@ -139,7 +178,7 @@ class Chat:
 
                     WHERE m.chat_id = %s
 
-                    ORDER BY tc.id ASC
+                    ORDER BY tc.tool_call_id ASC
                     ''',
                     (chat_id,)
                 )
@@ -156,9 +195,26 @@ class Chat:
         for row in tool_call_rows:
             assistant_message_id = row['assistant_message_id']
 
+            try:
+                row['arguments'] = json.loads(row['arguments'])
+            except (json.JSONDecodeError, TypeError):
+                row['arguments'] = ast.literal_eval(row['arguments'])
+
+            if isinstance(row['arguments'], dict) and 'arguments' in row['arguments']:
+                row['arguments'] = row['arguments']['arguments']
+
+            if isinstance(row['arguments'], str):
+                try:
+                    row['arguments'] = json.loads(row['arguments'])
+                except (json.JSONDecodeError, TypeError):
+                    row['arguments'] = ast.literal_eval(row['arguments'])
+
             tool_call = {
                 'id': row['tool_call_id'],
                 'type': row['type'],
+                'name': row['function_name'],
+                'status': row['status'],
+                'arguments': row['arguments'],
                 'function': {
                     'name': row['function_name'],
                     'arguments': row['arguments']
@@ -173,7 +229,7 @@ class Chat:
             if row['status'] == 'waiting approval':
                 tool_requests[row['tool_call_id']] = {
                     'type': row['type'],
-                    'function_name': row['function_name'],
+                    'name': row['function_name'],
                     'arguments': row['arguments']
                 }
 
@@ -231,6 +287,7 @@ class Chat:
         return {
             'title': chat['title'],
             'summary': chat['summary'],
+            'summary_pointer': chat['summary'] or 0,
             'messages': messages,
             'tool_requests': tool_requests
         }

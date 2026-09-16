@@ -4,52 +4,37 @@ import threading
 import queue
 import uuid
 import time
-from langchain_core.tools import tool
-from pydantic import BaseModel, Field
 import base64
-
-class CreateNewRunner(BaseModel):
-    """Use when and if you need to create a python code runner process. The runner stays open to recieve code and execute it untill you end the process. Only the runner is in sandbox but the rest of agent is out."""
-    details: str = Field(..., description="A description you want to attach to the runner to remember what the purpose of this runner is and its details\
- (ex. 'Create a machine learning model to detect houses pricing based on input data. the code will read \'/home/user/datasets/houses.csv\' file then do some preprocessing and cleaning then scaling then train KNN model then save it in \'.pkl\' file.').")
-
-class ExecuteCode(BaseModel):
-    """Use when and if you need to execute python line or code snipped in a runner then get the result of execution."""
-    idx: int = Field(..., description="The index of runner you want to use.")
-    code: str = Field(..., description="The code you want to execute (ex. \"print('hello')\nprint('world')\").")
-
-class StopRunner(BaseModel):
-    """Use when and if you need to stop and end a runner after you finish running your program using it."""
-    idx: int = Field(..., description="The index of runner you want to stop.")
-
-class ModifyRunner(BaseModel):
-    """Use when and if you need to modify the details of a runner for some reason."""
-    idx: int = Field(..., description="The index of runner you want to modify.")
-    details: str = Field(..., description="A description you want to attach to the runner to remember what the purpose of this runner is and its details\
- (ex. 'Create a machine learning model to detect houses pricing based on input data. the code will read \'/home/user/datasets/houses.csv\' file then do some preprocessing and cleaning then scaling then train KNN model then save it in \'.pkl\' file.').")
+import traceback
+import asyncio
 
 
 class PythonRunner:
     runners = []
 
+    # How long a single executeCode() call will wait before giving up on a
+    # runner that never printed its completion marker. Bump this for
+    # workloads you expect to be slow (e.g. browser automation).
+    DEFAULT_TIMEOUT = 120  # seconds
+    POLL_INTERVAL = 1.0    # how often we re-check "has the process died / timed out?"
+
     def __init__(self):
         pass
 
-    @tool(args_schema=CreateNewRunner)
-    async def createNewRunner(details: str) -> str:
+    def createNewRunner(details: str) -> str:
         if len(PythonRunner.runners) >= 4:
             return "Error: Maximum number of runners reached. Please stop an existing runner before creating a new one."
         try:
-            p = await subprocess.Popen(
+            p = subprocess.Popen(
                 [
                     "docker", "run",
                     "-i",
                     "--rm",
 
                     # 🔐 Resource limits
-                    "--memory", "256m",
-                    "--cpus", "0.5",
-                    "--pids-limit", "64",
+                    "--memory", "1024m",
+                    "--cpus", "1",
+                    "--pids-limit", "128",
 
                     # 🔒 Filesystem
                     "--read-only",
@@ -85,6 +70,10 @@ class PythonRunner:
             def reader(stream, tag):
                 for line in iter(stream.readline, ""):
                     q.put((tag, line))
+                # Stream closed (process exited / pipe broken). Push a
+                # sentinel so a waiting executeCode() call can notice the
+                # process is gone instead of blocking forever.
+                q.put((tag, None))
 
             threading.Thread(target=reader, args=(p.stdout, "OUT"), daemon=True).start()
             threading.Thread(target=reader, args=(p.stderr, "ERR"), daemon=True).start()
@@ -95,21 +84,23 @@ class PythonRunner:
                 "queue": q
             })
             if PythonRunner.runners[-1]['process'].poll() is None:
-                return f"Runner created successfully. Index: {len(PythonRunner.runners)-1}"
+                return f"Runner created successfully. ID: {len(PythonRunner.runners)-1}"
             else:
                 return f"Error: Unknown error have occured."
         except Exception as e:
             return f"Error: {e}"
 
-    @tool(args_schema=ExecuteCode)
-    async def executeCode(idx: int, code: str) -> dict:
-        if idx >= len(PythonRunner.runners):
+    async def executeCode(runnerId: int, code: str, timeout: float = None) -> str:
+        if runnerId < 0 or runnerId >= len(PythonRunner.runners):
             return "Error: Runner does not exist."
-        p = PythonRunner.runners[idx]['process']
+
+        timeout = timeout or PythonRunner.DEFAULT_TIMEOUT
+        runner = PythonRunner.runners[runnerId]
+        p = runner['process']
         marker = f"__END_{uuid.uuid4().hex}__"
 
         try:
-            q = PythonRunner.runners[idx]["queue"]
+            q = runner["queue"]
 
             def prepare_code(code, marker):
                 indentations = 0
@@ -132,92 +123,91 @@ class PythonRunner:
 
             code = prepare_code(code, marker)
 
-            # p.stdin.write(code)
-            await p.stdin.write(base64.b64encode(code.encode()).decode() + "\n__RUN__\n")
-            await p.stdin.flush()
-
-            # code_output = []
-
-            # # consume queue until we see marker or process exits and queue drains
-            # stdout_eof = stderr_eof = False
-
-            # while True:
-            #     try:
-            #         tag, line = q.get(timeout=0.2)   # small timeout avoids permanent blocking
-            #     except queue.Empty:
-            #         # if process has exited and both EOFs seen, stop
-            #         if p.poll() is not None and stdout_eof and stderr_eof:
-            #             break
-            #         continue
-
-            #     if line is None:
-            #         # EOF from a stream
-            #         if tag == "OUT":
-            #             stdout_eof = True
-            #         else:
-            #             stderr_eof = True
-            #         if p.poll() is not None and stdout_eof and stderr_eof:
-            #             break
-            #         continue
-
-            #     # normal line
-            #     code_output.append(line)
-
-            #     if marker in line:
-            #         break
+            p.stdin.write(base64.b64encode(code.encode()).decode() + "\n__RUN__\n")
+            p.stdin.flush()
 
             code_output = []
-            mode = None
+            stdout_eof = stderr_eof = False
+            deadline = time.monotonic() + timeout
 
             while True:
-                tag, line = q.get()
+                try:
+                    # Bounded wait: this is the actual fix. The original
+                    # unbounded q.get() would hang forever if the child
+                    # process never printed the completion marker (crash,
+                    # hang, or just still running).
+                    tag, line = await asyncio.to_thread(q.get, True, PythonRunner.POLL_INTERVAL)
+                except queue.Empty:
+                    # Nothing new within the poll interval — check whether
+                    # we should give up, then loop back and keep waiting.
+                    if p.poll() is not None and stdout_eof and stderr_eof:
+                        code_output.append(
+                            f"\n[Runner process exited (code {p.returncode}) before finishing this execution]"
+                        )
+                        break
+                    if time.monotonic() > deadline:
+                        code_output.append(f"\n[Execution timed out after {timeout}s — runner may be stuck]")
+                        # We have no way to interrupt code already running
+                        # inside the container, so retire this runner
+                        # instead of leaving it (and future calls) stuck.
+                        try:
+                            p.kill()
+                        except Exception:
+                            pass
+                        if runnerId < len(PythonRunner.runners):
+                            del PythonRunner.runners[runnerId]
+                        break
+                    continue
+
+                if line is None:
+                    # EOF sentinel from one of the reader threads.
+                    if tag == "OUT":
+                        stdout_eof = True
+                    else:
+                        stderr_eof = True
+                    continue
 
                 if "__OUT__" in line:
-                    mode = "out"
                     continue
                 elif "__ERR__" in line:
-                    mode = "err"
                     continue
-                elif "__END__" in line:
+                elif marker in line:
                     break
 
                 code_output.append(line)
 
-            # optional: drain remaining queued lines briefly
-            time.sleep(0.05)
+            # Drain anything left over so it can't leak into the next call.
             while not q.empty():
                 tag, line = q.get_nowait()
-                if line: code_output.append(line)
+                if line:
+                    code_output.append(line)
 
             return ''.join(code_output)
 
-
         except Exception as e:
+            traceback.print_exc()
             return str(e)
 
-    @tool(args_schema=StopRunner)
-    async def stopRunner(idx: int) -> str:
+    async def stopRunner(runnerId: int) -> str:
         try:
-            if idx >= len(PythonRunner.runners):
+            if runnerId < 0 or runnerId >= len(PythonRunner.runners):
                 return "Error: Runner does not exist."
-            if PythonRunner.runners[idx]['process']:
-                await PythonRunner.runners[idx]['process'].terminate()
-                del PythonRunner.runners[idx]
+            if PythonRunner.runners[runnerId]['process']:
+                PythonRunner.runners[runnerId]['process'].terminate()
+                del PythonRunner.runners[runnerId]
                 return f"Runner is stopped successfully."
         except Exception as e:
             return f"Error: {e}"
 
-    @tool(args_schema=ModifyRunner)
-    def modifyRunner(idx: int, details: str) -> str:
+    def modifyRunner(runnerId: int, details: str) -> str:
         try:
-            if idx >= len(PythonRunner.runners):
+            if runnerId < 0 or runnerId >= len(PythonRunner.runners):
                 return "Error: Runner does not exist."
-            PythonRunner.runners[idx]['details'] = details
+            PythonRunner.runners[runnerId]['details'] = details
             return f"Runner is modified successfully."
         except Exception as e:
             return f"Error: {e}"
 
-    @tool()
     def runnersList() -> list:
         """Used when you need to retrieve a list of runners indices and their details to know wheather to use one of them to run your code or create new one."""
-        return [{'index': i, 'details': x['details']} for i, x in enumerate(PythonRunner.runners)]
+        return [{'runnerId': i, 'details': x['details']} for i, x in enumerate(PythonRunner.runners)]

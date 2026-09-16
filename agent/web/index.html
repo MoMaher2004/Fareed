@@ -1,119 +1,204 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-bs-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fareed AI Assistant</title>
-  <!-- Bootstrap 5 -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fareed</title>
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <!-- Prism.js (Syntax Highlighting) -->
-  <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="code-viewer.css">
-  <link rel="stylesheet" href="command-viewer.css">
-  <link rel="stylesheet" href="audio-player.css">
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs/themes/prism-tomorrow.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/prismjs/prism.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs/components/prism-python.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.3/styles/github-dark.min.css" rel="stylesheet">
+
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.3/highlight.min.js"></script>
+
+  <link rel="stylesheet" href="/css/styles.css">
+
+  <script defer src="/js/config.js"></script>
+  <script defer src="/js/state.js"></script>
+  <script defer src="/js/utils/dom.js"></script>
+  <script defer src="/js/utils/download.js"></script>
+  <script defer src="/js/utils/formatting.js"></script>
+  <script defer src="/js/theme.js"></script>
+  <script defer src="/js/router.js"></script>
+  <script defer src="/js/markdown.js"></script>
+
+  <script defer src="/js/components/error.js"></script>
+  <script defer src="/js/components/image.js"></script>
+  <script defer src="/js/components/audio.js"></script>
+  <script defer src="/js/components/youtube-embed.js"></script>
+  <script defer src="/js/components/tool-usage.js"></script>
+  <script defer src="/js/components/reasoning.js"></script>
+  <script defer src="/js/components/code.js"></script>
+  <script defer src="/js/components/command.js"></script>
+  <script defer src="/js/components/message.js"></script>
+  <script defer src="/js/components/hot-answers.js"></script>
+
+  <script defer src="/js/communication.js"></script>
+  <script defer src="/js/chat.js"></script>
+  <script defer src="/js/composer.js"></script>
+  <script defer src="/js/drawer.js"></script>
+  <script defer src="/js/tool-request.js"></script>
+  <script defer src="/js/feedback.js"></script>
+  <script defer src="/js/app.js"></script>
 </head>
 <body>
-  <!-- Top Navbar -->
-  <nav class="navbar futuristic-navbar">
-    <div class="container-fluid px-3">
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="bi bi-stars me-2"></i> Fareed
-      </a>
-      <div class="d-flex align-items-center gap-2 gap-md-3">
-        <!-- Theme Toggle -->
-        <button class="btn btn-sm btn-outline-future" id="themeToggle" title="Toggle Theme">
-          <i class="bi bi-moon-stars-fill"></i>
-        </button>
-        <!-- Left Drawer: chats List -->
-        <button class="btn btn-sm btn-outline-future" data-bs-toggle="offcanvas" data-bs-target="#chatsDrawer" title="All chats">
-          <i class="bi bi-chat-left-text"></i>
-        </button>
-        <!-- Right Drawer: Current Chat History -->
-        <button class="btn btn-sm btn-outline-future" data-bs-toggle="offcanvas" data-bs-target="#historyDrawer" title="Message History">
-          <i class="bi bi-clock-history"></i>
+  <div id="app-shell" class="app-shell">
+    <aside id="app-drawer" class="app-drawer" aria-label="Chat navigation">
+      <div class="drawer-header">
+        <div class="drawer-brand">
+          <span class="drawer-logo"><i class="bi bi-stars"></i></span>
+          <span>Fareed Console</span>
+        </div>
+        <button id="drawer-close" class="icon-btn d-lg-none" type="button" aria-label="Close navigation">
+          <i class="bi bi-x-lg"></i>
         </button>
       </div>
-    </div>
-  </nav>
 
-  <!-- Main Chat Window -->
-  <main class="chat-container">
-    <div id="chatMessages" class="chat-messages">
-      <div class="message ai-message">
-        <div class="message-header"><i class="bi bi-robot me-1"></i> Fareed</div>
-        <div class="message-content">Hello! I'm Fareed. How can I assist you today?</div>
+      <div id="drawer-actions" class="drawer-actions" aria-label="Drawer actions"></div>
+
+      <div class="drawer-section">
+        <h6 class="drawer-section-title">Pinned</h6>
+        <div id="pinned-chats" class="chat-list"></div>
       </div>
-    </div>
 
-    <!-- Hot Answers / Suggestions (optional) -->
-    <div id="hotAnswers" class="hot-answers"></div>
+      <div class="drawer-section drawer-section-grow">
+        <h6 class="drawer-section-title">History</h6>
+        <div id="chat-history" class="chat-list"></div>
+      </div>
 
-    <!-- Input Area with Drag & Drop -->
-    <div class="input-area" id="dropZone">
-      <div id="attachmentPreview" class="attachment-preview d-none"></div>
-      <div class="input-wrapper">
-        <textarea id="userInput" class="form-control futuristic-textarea" placeholder="Type your message..." rows="1"></textarea>
-        <div class="input-actions">
-          <label for="fileUpload" class="action-btn" title="Upload Files">
-            <i class="bi bi-paperclip"></i>
-            <input type="file" id="fileUpload" class="d-none" multiple accept=".jpg,.jpeg,.png,.gif,.pdf,.txt,.py,.html,.css,.js,.json,.mp3,.wav,.mp4">
-          </label>
-          <button class="action-btn" id="voiceInputBtn" title="Voice Input">
-            <i class="bi bi-mic"></i>
-          </button>
-          <div class="form-check form-switch ms-1 align-self-center" title="Send as System Message">
-            <input class="form-check-input futuristic-switch" type="checkbox" id="systemMsgToggle">
-            <label class="form-check-label text-xs" for="systemMsgToggle">SYS</label>
-          </div>
-          <button id="sendBtn" class="btn btn-send futuristic-btn">
-            <i class="bi bi-send-fill"></i>
+    </aside>
+
+    <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
+    <main class="app-main">
+      <header class="topbar">
+        <button id="drawer-toggle" class="icon-btn" type="button" aria-label="Toggle navigation">
+          <i class="bi bi-list"></i>
+        </button>
+
+        <div class="topbar-title">Fareed Chat</div>
+
+        <div class="topbar-tools">
+          <span id="connection-status" class="topbar-status status-offline">offline</span>
+          <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle theme">
+            <i class="bi bi-moon-stars"></i>
           </button>
         </div>
+      </header>
+
+      <section id="chat-scroll" class="chat-container" aria-live="polite" aria-label="Chat messages">
+        <div id="chat-messages" class="chat-messages"></div>
+        <button id="jump-latest" class="jump-latest d-none" type="button" aria-label="Scroll to latest message">
+          <i class="bi bi-arrow-down"></i>
+        </button>
+      </section>
+
+      <div id="hot-answers" class="hot-answers d-none" aria-label="Suggested answers"></div>
+
+      <section id="composer" class="composer" aria-label="Message composer">
+        <div id="composer-normal" class="composer-normal">
+          <div class="composer-left">
+            <div class="dropdown" id="attach-wrapper">
+              <button class="icon-btn" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Add attachment">
+                <i class="bi bi-paperclip"></i>
+              </button>
+              <ul class="dropdown-menu">
+                <li><button class="dropdown-item" type="button" data-attach="document"><i class="bi bi-file-earmark-text me-2"></i>Document</button></li>
+                <li><button class="dropdown-item" type="button" data-attach="image"><i class="bi bi-image me-2"></i>Image</button></li>
+                <li><button class="dropdown-item" type="button" data-attach="video"><i class="bi bi-camera-video me-2"></i>Video</button></li>
+                <li><button class="dropdown-item" type="button" data-attach="file"><i class="bi bi-folder2-open me-2"></i>Other file</button></li>
+              </ul>
+            </div>
+
+            <button id="system-message-toggle" class="chip" type="button" aria-pressed="false" title="Send as system message">
+              <i class="bi bi-sliders"></i>
+              <span class="d-none d-sm-inline">System</span>
+            </button>
+          </div>
+
+          <textarea id="composer-input" rows="1" placeholder="Message the agent..." aria-label="Message input"></textarea>
+
+          <div class="composer-right">
+            <button id="voice-btn" class="icon-btn" type="button" aria-label="Voice input">
+              <i class="bi bi-mic"></i>
+            </button>
+            <button id="send-btn" class="send-btn" type="button" aria-label="Send message">
+              <i class="bi bi-arrow-up"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="composer-recording" class="composer-recording d-none" aria-label="Recording controls">
+          <button id="rec-cancel" class="icon-btn danger" type="button" aria-label="Cancel recording">
+            <i class="bi bi-x-lg"></i>
+          </button>
+
+          <canvas id="waveform" width="600" height="64" aria-hidden="true"></canvas>
+
+          <div id="rec-error" class="rec-error d-none" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span>Transcription failed.</span>
+            <button id="rec-retry" class="btn btn-sm btn-outline-danger" type="button">Retry</button>
+          </div>
+
+          <button id="rec-confirm" class="icon-btn primary" type="button" aria-label="Confirm recording">
+            <i class="bi bi-check-lg"></i>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <aside id="tool-request-panel" class="tool-panel" aria-label="Tool requests" aria-hidden="true">
+      <div class="tool-panel-inner">
+        <div class="tool-panel-header">
+          <div>
+            <i class="bi bi-tools me-2"></i>Tool requests
+          </div>
+          <span id="tool-request-count" class="badge text-bg-primary">0</span>
+        </div>
+        <div id="tool-request-list" class="tool-request-list"></div>
+        <div class="tool-panel-footer">
+          Active tool requests must be resolved before continuing.
+        </div>
       </div>
-      <div class="drop-hint text-center text-muted small py-2">📁 Drop files here to attach</div>
-    </div>
-  </main>
-
-  <!-- Left Drawer: chats List -->
-  <div class="offcanvas offcanvas-start" tabindex="-1" id="chatsDrawer">
-    <div class="offcanvas-header futuristic-header">
-      <h5 class="offcanvas-title"><i class="bi bi-chat-square-text me-2"></i>chats</h5>
-      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
-    </div>
-    <div class="offcanvas-body p-0" id="chatsList">
-      <!-- Dynamic chat cards -->
-    </div>
-    <div class="offcanvas-footer p-3 border-top border-secondary">
-      <button class="btn btn-outline-future w-100" id="newchatBtn">
-        <i class="bi bi-plus-lg me-2"></i>New chat
-      </button>
-    </div>
+    </aside>
   </div>
 
-  <!-- Right Drawer: Current Chat History -->
-  <div class="offcanvas offcanvas-end" tabindex="-1" id="historyDrawer">
-    <div class="offcanvas-header futuristic-header">
-      <h5 class="offcanvas-title"><i class="bi bi-journal-text me-2"></i>Message History</h5>
-      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
-    </div>
-    <div class="offcanvas-body p-0" id="historyList">
-      <!-- Dynamic history items -->
+  <div class="modal fade" id="feedback-modal" tabindex="-1" aria-labelledby="feedback-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 id="feedback-title" class="modal-title">Response feedback</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="btn-group w-100 mb-3" role="group" aria-label="Feedback sentiment">
+            <button id="feedback-positive" type="button" class="btn btn-outline-success">
+              <i class="bi bi-hand-thumbs-up me-1"></i>Positive
+            </button>
+            <button id="feedback-negative" type="button" class="btn btn-outline-danger">
+              <i class="bi bi-hand-thumbs-down me-1"></i>Negative
+            </button>
+          </div>
+
+          <div id="feedback-options" class="feedback-options mb-3" aria-label="Quick feedback options"></div>
+
+          <div class="form-floating">
+            <textarea id="feedback-comment" class="form-control" placeholder="Additional feedback" style="height:110px"></textarea>
+            <label for="feedback-comment">Additional comments</label>
+          </div>
+
+          <div id="feedback-error" class="text-danger small mt-2 d-none" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Cancel</button>
+          <button id="feedback-submit" class="btn btn-primary" type="button">Submit</button>
+        </div>
+      </div>
     </div>
   </div>
-
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
-  <script src="script.js" type="module"></script>
 </body>
 </html>

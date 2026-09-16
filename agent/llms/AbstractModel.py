@@ -4,7 +4,8 @@ from tools.Tool import Tool
 import traceback
 import json
 from termcolor import cprint
-
+import ast
+from copy import deepcopy
 
 class AbstractModel(ABC):
     url: str = None
@@ -27,6 +28,7 @@ class AbstractModel(ABC):
 
     @classmethod
     def formate_history(cls, history):
+        history = deepcopy(history)
         for m in history:
             if m['role'] == 'system':
                 pass
@@ -34,62 +36,29 @@ class AbstractModel(ABC):
                 pass
             if m['role'] == 'tool':
                 if 'status' in m: del m['status']
+                if 'full_content' in m: del m['full_content']
             if m['role'] == 'assistant':
                 if m.get('tool_calls') and len(m.get('tool_calls')) > 0:
                     for tc in m['tool_calls']:
                         tc['function'] = {
-                            'name': tc['name'],
-                            'arguments': str(tc['arguments'])
+                            'name': tc.get('name'),
+                            'arguments': str(tc.get('arguments'))
                         }
-
+                if m.get('reasoning'):
+                    m['reasoning_content'] = m['reasoning']
+                    del m['reasoning']
         return history
 
     @classmethod
-    async def stream(cls, history):
+    async def stream(cls, history, tools_schema = []):
         try:
-            toolsSchema = [
-                {
-        "type": "function",
-        "function": {
-            "name": "tools_pack",
-            "description": (
-                "Returns a list of available tools and their descriptions "
-                "so that you can use extra tools according to your needs."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pack_names": {
-                        "description": (
-                            "Names of the tool packs to use. "
-                            "You can choose from the following options: "
-                            "'python' for python execution tools, "
-                            "'ssh' for SSH tools, "
-                            "'cronjob' to manage cron jobs, "
-                            "'updater' for tools you can use to understand "
-                            "your architecture and suggest updates, "
-                            "'time' to get time information, "
-                            "'bye' to end the session, "
-                            "'search' for search tools."
-                        ),
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "required": ["pack_names"]
-            }
-        }
-    }
-            ]
+            toolsSchema = tools_schema
             content = []
             reasoning = []
             tool_calls = []
             tool = None
-
+            
             history = cls.formate_history(history)
-            cprint(history, "yellow")
             for r in OpenAI(api_key=cls.apiKey, base_url=cls.url).chat.completions.create(
                 model=cls.name,
                 messages=history,
@@ -107,8 +76,21 @@ class AbstractModel(ABC):
                     cls.mapFinishReason("finish_reason")
                 ) == cls.mapFinishReason("tool_calls"):
                     for tc in tool_calls:
-                        tc['arguments'] = json.loads(''.join(tc['arguments']))
-                    yield {'type': 'tool_calls', 'tool_calls': tool_calls}
+                        raw = ''.join(tc['arguments'])
+                        try:
+                            tc['arguments'] = json.loads(raw)
+                        except (json.JSONDecodeError, TypeError):
+                            tc['arguments'] = ast.literal_eval(raw)
+
+                        if isinstance(tc['arguments'], dict) and 'arguments' in tc['arguments']:
+                            tc['arguments'] = tc['arguments']['arguments']
+
+                        if isinstance(tc['arguments'], str):
+                            try:
+                                tc['arguments'] = json.loads(tc['arguments'])
+                            except (json.JSONDecodeError, TypeError):
+                                tc['arguments'] = ast.literal_eval(tc['arguments'])
+                    yield {'type': 'tool_calls', 'tool_calls': json.loads(json.dumps(tool_calls))}
                 elif r.choices[0].delta.tool_calls != None:
                     if r.choices[0].delta.tool_calls[0].function.name:
                         tool = {
@@ -129,5 +111,87 @@ class AbstractModel(ABC):
                 else:
                     yield {'type': 'error', 'content': 'Unknown chunk type'}
         except Exception as e:
-            print(traceback.format_exc())
             yield {'type': 'error', 'content': "internal error: " + str(e)}
+            print(traceback.format_exc())
+
+    @classmethod
+    async def chat(cls, history, tools_schema=[]):
+        try:
+            toolsSchema = tools_schema
+
+            history = cls.formate_history(history)
+
+            response = OpenAI(
+                api_key=cls.apiKey,
+                base_url=cls.url
+            ).chat.completions.create(
+                model=cls.name,
+                messages=history,
+                tools=toolsSchema,
+                stream=False
+            )
+
+            message = response.choices[0]
+            message.finish_reason = cls.mapFinishReason(message.finish_reason)
+            return message
+            
+            # finish_reason = getattr(
+            #     response.choices[0],
+            #     cls.mapFinishReason("finish_reason")
+            # )
+
+            # if finish_reason == cls.mapFinishReason("tool_calls"):
+            #     tool_calls = []
+
+            #     for tc in message.tool_calls or []:
+            #         arguments = tc.function.arguments
+
+            #         try:
+            #             arguments = json.loads(arguments)
+            #         except (json.JSONDecodeError, TypeError):
+            #             arguments = ast.literal_eval(arguments)
+
+            #         if isinstance(arguments, dict) and "arguments" in arguments:
+            #             arguments = arguments["arguments"]
+
+            #         if isinstance(arguments, str):
+            #             try:
+            #                 arguments = json.loads(arguments)
+            #             except (json.JSONDecodeError, TypeError):
+            #                 arguments = ast.literal_eval(arguments)
+
+            #         tool_calls.append({
+            #             "name": tc.function.name,
+            #             "arguments": arguments,
+            #             "id": tc.id,
+            #             "type": tc.type
+            #         })
+
+            #     return {
+            #         "type": "tool_calls",
+            #         "tool_calls": tool_calls
+            #     }
+
+            # if finish_reason == cls.mapFinishReason("stop"):
+            #     return {
+            #         "type": "message",
+            #         "content": message.content,
+            #         "reasoning": getattr(
+            #             message,
+            #             "reasoning_content",
+            #             None
+            #         )
+            #     }
+
+            # return {
+            #     "type": "error",
+            #     "content": f"Unknown finish reason: {finish_reason}"
+            # }
+
+        except Exception as e:
+            print(traceback.format_exc())
+
+            return {
+                "type": "error",
+                "content": "internal error: " + str(e)
+            }
