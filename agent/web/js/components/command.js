@@ -1,4 +1,13 @@
 (function () {
+  function highlightElement(codeEl) {
+    if (!window.hljs) return;
+    try {
+      hljs.highlightElement(codeEl);
+    } catch (error) {
+      // Highlighting is optional.
+    }
+  }
+
   function create(data = {}, options = { streaming: false }) {
     let command = String(data.command ?? data.content ?? '');
     const filename = data.filename || 'command.sh';
@@ -6,7 +15,14 @@
     const pre = window.DomUtils.el('pre', {
       class: 'code-viewer-body',
       style: `max-height:${window.APP_CONFIG.codeViewer.maxHeight}px`
-    }, command);
+    });
+
+    const codeEl = window.DomUtils.el('code', { class: 'language-bash' }, command);
+    pre.append(codeEl);
+
+    if (!options.streaming) {
+      highlightElement(codeEl);
+    }
 
     function getText() {
       return command;
@@ -14,16 +30,18 @@
 
     function append(text) {
       command += String(text ?? '');
-      pre.textContent = command;
+      codeEl.textContent = command;
+      codeEl.removeAttribute('data-highlighted');
     }
 
     function replace(text) {
       command = String(text ?? '');
-      pre.textContent = command;
+      codeEl.textContent = command;
+      codeEl.removeAttribute('data-highlighted');
     }
 
     function finalize() {
-      // Command blocks usually do not need syntax highlighting.
+      highlightElement(codeEl);
     }
 
     function getMarkdown() {
@@ -42,7 +60,11 @@
     });
 
     const downloadBtn = window.DomUtils.iconButton('bi-download', 'Download as Bash script', () => {
-      window.DownloadUtils.downloadText(filename, getScript(), 'text/x-shellscript;charset=utf-8');
+      window.DownloadUtils.downloadText(
+        filename,
+        getScript(),
+        'text/x-shellscript;charset=utf-8'
+      );
     });
 
     const expandBtn = window.DomUtils.iconButton('bi-arrows-fullscreen', 'Expand command', () => {
@@ -58,7 +80,11 @@
       window.DomUtils.el('div', { class: 'component-meta' },
         window.DomUtils.el('span', { class: 'badge language-badge' }, 'bash')
       ),
-      window.DomUtils.el('div', { class: 'component-actions' }, copyBtn, downloadBtn, expandBtn)
+      window.DomUtils.el('div', { class: 'component-actions' },
+        copyBtn,
+        downloadBtn,
+        expandBtn
+      )
     );
 
     const root = window.DomUtils.el('article', { class: 'command-component' }, header, pre);

@@ -7,6 +7,7 @@ import json
 from psycopg.rows import dict_row
 import ast
 from termcolor import cprint
+from utils.ToolCallParser import ToolCallParser
 
 class Chat:
     async def get_chats() -> list:
@@ -36,6 +37,7 @@ class Chat:
                             ) || '...'
                         ) AS title,
                         c.summary,
+                        c.pinned,
                         c.created_at,
                         c.updated_at
                     FROM Chat c
@@ -80,10 +82,48 @@ class Chat:
         chat['updated_at'] = time_utils.fromUTC(chat['updated_at'])
         return chat
 
+    async def delete_chat(chat_id) -> dict:
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    '''
+                    DELETE FROM Chat
+                    WHERE id = %s
+                    RETURNING *
+                    ''',
+                    (chat_id,)
+                )
+
+                chat = await cursor.fetchone()
+
+        chat['created_at'] = time_utils.fromUTC(chat['created_at'])
+        chat['updated_at'] = time_utils.fromUTC(chat['updated_at'])
+        return chat
+
+    async def toggle_pinning_chat(chat_id) -> dict:
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    '''
+                    UPDATE Chat SET pinned = NOT pinned
+                    WHERE id = %s
+                    RETURNING *
+                    ''',
+                    (chat_id,)
+                )
+
+                chat = await cursor.fetchone()
+
+        chat['created_at'] = time_utils.fromUTC(chat['created_at'])
+        chat['updated_at'] = time_utils.fromUTC(chat['updated_at'])
+        return chat
+
     async def get_chat(chat_id: int):
         # -------------------------
         # Chat
         # -------------------------
+
+        parser = ToolCallParser(raw_fields={"code"})
 
         async with DB.connection() as conn:
             async with conn.cursor(row_factory=dict_row) as cursor:
@@ -93,6 +133,7 @@ class Chat:
                         id,
                         title,
                         summary,
+                        summary_pointer,
                         created_at,
                         updated_at
                     FROM Chat
@@ -124,7 +165,9 @@ class Chat:
                         ar.content AS reasoning_content,
 
                         tm.tool_call_id AS tool_message_tool_call_id,
-                        tm.content AS tool_content
+                        tm.content AS tool_content,
+
+                        tc.status AS status
 
                     FROM Message AS m
 
@@ -142,6 +185,9 @@ class Chat:
 
                     LEFT JOIN Tool_Message AS tm
                         ON tm.message_id = m.id
+
+                    LEFT JOIN Tool_Call AS tc
+                        ON tm.tool_call_id = tc.tool_call_id
 
                     WHERE m.chat_id = %s
 
@@ -195,19 +241,21 @@ class Chat:
         for row in tool_call_rows:
             assistant_message_id = row['assistant_message_id']
 
-            try:
-                row['arguments'] = json.loads(row['arguments'])
-            except (json.JSONDecodeError, TypeError):
-                row['arguments'] = ast.literal_eval(row['arguments'])
+            row['arguments'] = parser.parse(row['arguments'])
+
+            # try:
+            #     row['arguments'] = json.loads(row['arguments'])
+            # except (json.JSONDecodeError, TypeError):
+            #     row['arguments'] = ast.literal_eval(row['arguments'])
 
             if isinstance(row['arguments'], dict) and 'arguments' in row['arguments']:
                 row['arguments'] = row['arguments']['arguments']
 
-            if isinstance(row['arguments'], str):
-                try:
-                    row['arguments'] = json.loads(row['arguments'])
-                except (json.JSONDecodeError, TypeError):
-                    row['arguments'] = ast.literal_eval(row['arguments'])
+            # if isinstance(row['arguments'], str):
+            #     try:
+            #         row['arguments'] = json.loads(row['arguments'])
+            #     except (json.JSONDecodeError, TypeError):
+            #         row['arguments'] = ast.literal_eval(row['arguments'])
 
             tool_call = {
                 'id': row['tool_call_id'],
@@ -278,16 +326,55 @@ class Chat:
                 messages.append({
                     'role': 'tool',
                     'tool_call_id': row['tool_message_tool_call_id'],
-                    'content': row['tool_content']
+                    'content': row['tool_content'],
+                    'status': row['status']
                 })
         
         chat['created_at'] = time_utils.fromUTC(chat['created_at'])
         chat['updated_at'] = time_utils.fromUTC(chat['updated_at'])
 
+        cprint(messages, "green")
+
         return {
             'title': chat['title'],
             'summary': chat['summary'],
-            'summary_pointer': chat['summary'] or 0,
+            'summary_pointer': chat['summary_pointer'] or 0,
             'messages': messages,
             'tool_requests': tool_requests
         }
+
+    async def update_summary(chat_id: str, summary: str, pointer: int):
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    '''
+                    UPDATE chat SET summary = %s, summary_pointer = %s
+                    WHERE id = %s
+                    ''',
+                    (summary, pointer, chat_id)
+                )
+        return {"status": "success"}
+
+    async def update_notes(chat_id: str, notes: str):
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    '''
+                    UPDATE chat SET notebook = %s
+                    WHERE id = %s
+                    ''',
+                    (json.dumps(notes), chat_id)
+                )
+        return {"status": "success"}
+
+    async def update_title(chat_id: str, title: str):
+        async with DB.connection() as conn:
+            async with conn.cursor(row_factory=dict_row) as cursor:
+                await cursor.execute(
+                    '''
+                    UPDATE chat SET title = %s
+                    WHERE id = %s
+                    ''',
+                    (title, chat_id)
+                )
+        return {"status": "success"}

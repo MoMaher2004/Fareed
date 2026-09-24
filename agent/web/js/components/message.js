@@ -93,6 +93,8 @@
       reasoning: null,
       rawBlocks: [],
       hotAnswersEl: null,
+      currentReasoning: null,
+      reasoningBlocks: [],
 
       activeRichBlock: null,
       richBlocks: Object.create(null),
@@ -106,6 +108,7 @@
       },
 
       addMarkdownSegmentFinal(text) {
+        this.closeReasoning();
         this.breakRichBlock();
 
         const segment = window.DomUtils.el('div', { class: 'markdown-body' });
@@ -127,6 +130,7 @@
       },
 
       addHotAnswer(label) {
+        this.closeReasoning();
         const value = String(label ?? '').trim();
         if (!value) return;
 
@@ -150,6 +154,7 @@
       },
 
       startTool(data) {
+        this.closeReasoning();
         if (!window.APP_CONFIG.features.toolUsage) return null;
 
         this.breakRichBlock();
@@ -180,7 +185,113 @@
         return entry;
       },
 
+      resolveToolStatus(data = {}) {
+        // Direct error indicators
+        if (
+          data.error ||
+          data.failed === true ||
+          data.is_error === true ||
+          data.isError === true ||
+          data.ok === false ||
+          data.success === false
+        ) {
+          return 'error';
+        }
+
+        // Extract possible status field
+        const rawStatus =
+          data.status ??
+          data.state ??
+          data.result_status ??
+          data.resultStatus ??
+          (data.result && typeof data.result === 'object'
+            ? data.result.status ??
+              data.result.state ??
+              data.result.result_status ??
+              data.result.resultStatus
+            : undefined);
+
+        // Boolean status
+        if (typeof rawStatus === 'boolean') {
+          return rawStatus ? 'done' : 'error';
+        }
+
+        const status = String(rawStatus ?? '').toLowerCase().trim();
+
+        // If no explicit status exists, inspect result object for error markers
+        if (!status) {
+          if (
+            data.result &&
+            typeof data.result === 'object' &&
+            (
+              data.result.error ||
+              data.result.exception ||
+              data.result.traceback ||
+              data.result.failed === true ||
+              data.result.success === false
+            )
+          ) {
+            return 'error';
+          }
+
+          return 'done';
+        }
+
+        const errorStatuses = [
+          'error',
+          'errored',
+          'err',
+          'failed',
+          'failure',
+          'fail',
+          'exception',
+          'timeout',
+          'timed_out',
+          'timedout',
+          'cancelled',
+          'canceled',
+          'denied',
+          'rejected',
+          'invalid'
+        ];
+
+        if (errorStatuses.includes(status)) {
+          return 'error';
+        }
+
+        const successStatuses = [
+          'success',
+          'succeeded',
+          'ok',
+          'okay',
+          'done',
+          'completed',
+          'complete',
+          'finished',
+          'passed',
+          'approved',
+          'resolved'
+        ];
+
+        if (successStatuses.includes(status)) {
+          return 'done';
+        }
+
+        // Partial matching as fallback
+        if (/(error|fail|exception|timeout|cancel|denied|reject|invalid)/.test(status)) {
+          return 'error';
+        }
+
+        if (/(success|ok|done|complet|finish|pass|approv|resolv)/.test(status)) {
+          return 'done';
+        }
+
+        return 'done';
+      },
+
       completeTool(data) {
+        this.closeReasoning();
+
         if (!window.APP_CONFIG.features.toolUsage) return;
 
         let entry = null;
@@ -202,14 +313,16 @@
           entry = this.toolPending.find((item) => item.status === 'running') || null;
         }
 
-        // Update the existing section in place.
+        const resolvedStatus = this.resolveToolStatus(data);
+
         if (entry) {
           entry.component.update({
             result: data.result ?? null,
-            status: data.error ? 'error' : (data.status || 'done')
+            status: resolvedStatus
           });
 
-          entry.status = data.error ? 'error' : 'done';
+          entry.status = resolvedStatus;
+
           this.toolPending = this.toolPending.filter((item) => item !== entry);
           return;
         }
@@ -220,7 +333,7 @@
           name: data.name || 'tool',
           arguments: data.arguments ?? null,
           result: data.result ?? null,
-          status: data.error ? 'error' : 'done'
+          status: resolvedStatus
         });
 
         contentEl.append(component.root);
@@ -273,6 +386,7 @@
       },
 
       appendMarkdown(text) {
+        this.closeReasoning();
         this.breakRichBlock();
 
         this.ensureMarkdown();
@@ -281,6 +395,7 @@
       },
 
       addMarkdownFinal(text) {
+        this.closeReasoning();
         this.breakRichBlock();
         this.ensureMarkdown();
         this.markdownText += String(text ?? '');
@@ -289,6 +404,7 @@
       },
 
       addCode(data) {
+        this.closeReasoning();
         this.breakRichBlock();
         const component = window.CodeComponent.create(data);
         contentEl.append(component.root);
@@ -296,6 +412,7 @@
       },
 
       appendCode(data) {
+        this.closeReasoning();
         const chunkText = String(data.code ?? '');
         const explicitKey = this.getExplicitCodeKey(data);
         const implicitKey = this.getImplicitCodeKey(data);
@@ -357,6 +474,7 @@
       },
 
       addCommand(data) {
+        this.closeReasoning();
         if (!window.APP_CONFIG.features.commands) return;
 
         this.breakRichBlock();
@@ -369,6 +487,7 @@
       },
       
       appendCommand(data) {
+        this.closeReasoning();
         if (!window.APP_CONFIG.features.commands) return;
 
         const chunkText = String(data.command ?? data.content ?? '');
@@ -428,6 +547,7 @@
       },
 
       addImage(data) {
+        this.closeReasoning();
         this.breakRichBlock();
         const component = window.ImageComponent.create(data);
         contentEl.append(component.root);
@@ -435,6 +555,7 @@
       },
 
       addAudio(data) {
+        this.closeReasoning();
         this.breakRichBlock();
         const component = window.AudioComponent.create(data);
         contentEl.append(component.root);
@@ -442,6 +563,7 @@
       },
 
       addYouTube(data) {
+        this.closeReasoning();
         if (!window.APP_CONFIG.features.youtubeEmbed) return;
         this.breakRichBlock();
         const component = window.YouTubeEmbedComponent.create(data);
@@ -450,6 +572,7 @@
       },
 
       addToolUsage(data) {
+        this.closeReasoning();
         if (!window.APP_CONFIG.features.toolUsage) return;
         this.breakRichBlock();
         const component = window.ToolUsageComponent.create(data);
@@ -458,19 +581,28 @@
 
       appendReasoning(text) {
         if (!window.APP_CONFIG.features.reasoning) return;
-        if (!this.reasoning) {
-          this.reasoning = window.ReasoningComponent.create();
-          contentEl.prepend(this.reasoning.root);
+
+        if (!this.currentReasoning) {
+          this.currentReasoning = window.ReasoningComponent.create();
+          this.reasoningBlocks.push(this.currentReasoning);
+          contentEl.append(this.currentReasoning.root);
         }
-        this.reasoning.append(text);
+
+        this.currentReasoning.append(text);
+      },
+
+      closeReasoning() {
+        this.currentReasoning = null;
       },
 
       addError(message) {
+        this.closeReasoning();
         this.breakRichBlock();
         contentEl.append(window.ErrorComponent.create(message).root);
       },
 
       addUnsupported(contentType) {
+        this.closeReasoning();
         this.breakRichBlock();
         contentEl.append(window.DomUtils.el('div', { class: 'text-muted small' },
           `Unsupported content type: ${contentType || 'unknown'}`
@@ -495,9 +627,18 @@
           this.highlight();
         }
 
-        if (this.reasoning && typeof this.reasoning.finalize === 'function') {
-          this.reasoning.finalize();
+        // Finalize every separate reasoning block
+        if (Array.isArray(this.reasoningBlocks)) {
+          this.reasoningBlocks.forEach((reasoningBlock) => {
+            if (reasoningBlock && typeof reasoningBlock.finalize === 'function') {
+              reasoningBlock.finalize();
+            }
+          });
         }
+
+        // Reset reasoning state so the next stream starts fresh
+        this.reasoningBlocks = [];
+        this.currentReasoning = null;
 
         // Close any tool sections still waiting for a result.
         this.toolPending.slice().forEach((entry) => {
@@ -512,11 +653,13 @@
         });
         this.toolPending = [];
 
-        this.richComponents.forEach((component) => {
-          if (component && typeof component.finalize === 'function') {
-            component.finalize();
-          }
-        });
+        if (Array.isArray(this.richComponents)) {
+          this.richComponents.forEach((component) => {
+            if (component && typeof component.finalize === 'function') {
+              component.finalize();
+            }
+          });
+        }
 
         this.activeRichBlock = null;
 

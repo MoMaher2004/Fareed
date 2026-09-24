@@ -78,13 +78,13 @@ class Message:
                         (%s, %s)""",
                         (message_id, message['content'])
                     )
-                    if message.get('reasoning') is not None:
+                    if message.get('reasoning_content') is not None:
                         await cursor.execute(
                             f"""INSERT INTO Assistant_reasoning
                             (message_id, content)
                             VALUES
                             (%s, %s)""",
-                            (message_id, message['reasoning'])
+                            (message_id, message['reasoning_content'])
                         )
                     if message.get('tool_calls') is not None and len(message['tool_calls']) > 0:
                         await cursor.executemany(

@@ -32,6 +32,15 @@
     window.ToolRequestPanel.init();
     window.Feedback.init();
 
+    if (window.visualViewport) {
+      const setAppHeight = () => {
+        document.documentElement.style.setProperty('--app-height', `${window.visualViewport.height}px`);
+      };
+      setAppHeight();
+      window.visualViewport.addEventListener('resize', setAppHeight);
+    }
+
+    // --- Core Stream & UI Events ---
     window.Events.on('chunk', (chunk) => window.Chat.handleChunk(chunk));
 
     window.Events.on('chatId', (chatId) => {
@@ -44,6 +53,54 @@
       window.HotAnswers.render(items);
     });
 
+    // Handle Title Update (Using 'title' parameter now)
+    window.Events.on('server:chat_title_updated', ({ chatId, title }) => {
+      if (!chatId || !title) return;
+
+      const chat = window.AppState.chats.find(c => c.id === chatId);
+      if (chat) chat.title = title;
+
+      if (chatId === window.AppState.currentChatId) {
+        const topbarTitle = document.querySelector('.topbar-title');
+        if (topbarTitle) topbarTitle.textContent = title;
+        document.title = `${title} - Agent Console`;
+      }
+      
+      window.Events.emit('drawer:update-chat-title', { chatId, title });
+    });
+
+    // Handle Pinning Toggle
+    window.Events.on('server:toggle_pinning_chat', ({ chatId }) => {
+      if (!chatId) return;
+      const chat = window.AppState.chats.find(c => c.id === chatId);
+      if (chat) {
+        chat.pinned = !chat.pinned;
+        // This triggers the drawer to re-render and move the chat between Pinned/History lists
+        window.Events.emit('chats:updated', window.AppState.chats); 
+      }
+    });
+
+    // Handle Chat Deletion
+    window.Events.on('server:delete_chat', ({ chatId }) => {
+      if (!chatId) return;
+      
+      // Remove from state
+      window.AppState.chats = window.AppState.chats.filter(c => c.id !== chatId);
+      window.Events.emit('chats:updated', window.AppState.chats);
+
+      // If the deleted chat was currently open, act like "New Chat" was clicked
+      if (chatId === window.AppState.currentChatId) {
+        if (window.Chat.startNewChat) {
+          window.Chat.startNewChat({ updateUrl: true });
+        } else {
+          window.AppState.currentChatId = null;
+          window.Router.setRoot(true);
+          if (window.Chat.clearMessages) window.Chat.clearMessages();
+          if (window.Chat.showWelcome) window.Chat.showWelcome();
+        }
+      }
+    });
+
     window.Events.on('sendState', (state) => {
       window.Composer.setSendState(state);
     });
@@ -51,13 +108,11 @@
     window.Events.on('connectionStatus', (status) => {
       updateConnectionStatus(status);
 
+      // Auto-rejoin chat if we reconnect after a drop
       if (status === 'connected') {
-        // If this is a reconnection and we already have an open chat,
-        // rejoin it so the backend can resend history/state if needed.
         if (hasConnectedOnce && window.AppState.currentChatId) {
           window.Communication.joinChat(window.AppState.currentChatId);
         }
-
         hasConnectedOnce = true;
       }
     });
@@ -70,60 +125,103 @@
       console.info('Message edited', payload);
     });
 
+    // --- Server Pushed Events ---
+    
     window.Events.on('server:history', (payload) => {
       console.log('Received history event', payload);
-      Chat.applyServerHistory(payload);
+      window.Chat.applyServerHistory(payload);
     });
 
     window.Events.on('server:chats_list', (chats) => {
-      AppState.chats = Array.isArray(chats) ? chats : [];
-      window.Events.emit('chats:updated', AppState.chats);
+      window.AppState.chats = Array.isArray(chats) ? chats : [];
+      window.Events.emit('chats:updated', window.AppState.chats);
     });
 
-    window.Events.on('server:chat_created', (chatId) => {
+    window.Events.on('server:chat_created', (payload) => {
+      const chatId = typeof payload === 'string' ? payload : payload.chatId;
+      const title = typeof payload === 'object' && payload.title ? payload.title : 'New chat';
+      const temporary = typeof payload === 'object' ? Boolean(payload.temporary) : false;
+
       if (!chatId) return;
 
-      AppState.currentChatId = chatId;
-      Router.setChatId(chatId, true);
+      window.AppState.currentChatId = chatId;
+      window.Router.setChatId(chatId, true);
 
-      const exists = AppState.chats.some((chat) => chat.id === chatId);
+      const exists = window.AppState.chats.some((chat) => chat.id === chatId);
 
       if (!exists) {
-        AppState.chats = [
+        window.AppState.chats = [
           {
             id: chatId,
-            title: 'New chat',
+            title,
             pinned: false,
-            temporary: false,
-            updated_at: Date.now()
+            temporary
           },
-          ...AppState.chats
+          ...window.AppState.chats
         ];
 
-        window.Events.emit('chats:updated', AppState.chats);
+        window.Events.emit('chats:updated', window.AppState.chats);
       }
     });
 
     window.Events.on('server:tool_request', (chunk) => {
-      ToolRequestPanel.handleChunk(chunk);
+      window.ToolRequestPanel.handleChunk(chunk);
     });
 
     window.Events.on('server:hot_answers', (items) => {
-      HotAnswers.render(items);
+      window.HotAnswers.render(items);
     });
 
     window.Events.on('server:send_state', (state) => {
-      Composer.setSendState(state);
+      window.Composer.setSendState(state);
     });
 
     window.Events.on('server:connection_status', (status) => {
       updateConnectionStatus(status);
     });
 
+    // --- NEW: Chat Title Update Event ---
+    window.Events.on('server:chat_title_updated', ({ chatId, title }) => {
+      if (!chatId || !title) return;
+
+      // 1. Update state silently (avoid full drawer re-render to preserve animation)
+      const chat = window.AppState.chats.find(c => c.id === chatId);
+      if (chat) {
+        chat.title = title;
+      }
+
+      // 2. Update Topbar and Document title if it's the currently active chat
+      if (chatId === window.AppState.currentChatId) {
+        const topbarTitle = document.querySelector('.topbar-title');
+        if (topbarTitle) topbarTitle.textContent = title;
+        document.title = `${title} - Agent Console`;
+      }
+      
+      // 3. Tell the drawer to animate the specific DOM node
+      window.Events.emit('drawer:update-chat-title', { chatId, title });
+    });
+
+    window.Events.on('server:models_list', (models) => {
+      window.AppState.models = models || {};
+      if (window.Composer.populateModelDropdown) {
+        window.Composer.populateModelDropdown(models);
+      }
+    });
+
+    window.Events.on('server:current_model_setting', ({ model, effort }) => {
+      window.AppState.currentModel = model;
+      window.AppState.currentEffort = effort;
+      if (window.Composer.setModelSettings) {
+        window.Composer.setModelSettings(model, effort);
+      }
+    });
+
+    // --- Initialization ---
     window.Router.init(handleRouterChange);
     window.Communication.connect();
     window.Chat.loadChatList();
 
+    // --- Public API ---
     window.AgentUI = {
       config: window.APP_CONFIG,
       state: window.AppState,

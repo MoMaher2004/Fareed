@@ -52,19 +52,38 @@
     const root = window.DomUtils.el('details', { class: 'tool-usage' }, summary, body);
 
     function setStatus(status) {
-      state.status = status;
+      const normalized = String(status ?? '').toLowerCase().trim();
+
+      state.status = normalized;
+
       root.classList.remove('tool-running', 'tool-done', 'tool-error');
 
-      if (status === 'running') {
+      if (
+        normalized === 'running' ||
+        normalized === 'waiting approval' ||
+        normalized === 'waiting_approval' ||
+        normalized === 'waiting' ||
+        normalized === 'pending'
+      ) {
         statusIcon.className = 'bi bi-arrow-repeat spin';
         root.classList.add('tool-running');
-      } else if (status === 'error') {
+        return;
+      }
+
+      if (
+        normalized === 'error' ||
+        normalized === 'denied' ||
+        normalized === 'failed' ||
+        normalized === 'failure' ||
+        normalized === 'fail'
+      ) {
         statusIcon.className = 'bi bi-x-circle-fill';
         root.classList.add('tool-error');
-      } else {
-        statusIcon.className = 'bi bi-check-circle-fill';
-        root.classList.add('tool-done');
+        return;
       }
+
+      statusIcon.className = 'bi bi-check-circle-fill';
+      root.classList.add('tool-done');
     }
 
     function update(data2 = {}) {

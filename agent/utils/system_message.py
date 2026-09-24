@@ -39,12 +39,13 @@ You must format every response using ONLY these tags:
 - <*&END&*> to end the response (required)
 
 Rules:
-- ALWAYS end your response with <*&END&*> to mark the end of current message even if the chat is continuing
+- ALWAYS end your response with <*&END&*> to mark the end of current message and don't send content of the same message after this tag
 - DO NOT output anything outside tags
 - Tags are case-sensitive and must match exactly
 - You can use multiple TEXT, CODE, etc. blocks in one response
 - Hot answers are optional and their content's length is too short
 - Tags are used for any response language
+- DO NOT try to call a tool that doesn't exist in your current tool schema
 
 Formatting rules:
 - No spaces inside tag brackets

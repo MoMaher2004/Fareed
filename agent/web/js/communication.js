@@ -319,10 +319,11 @@
   const pendingQueue = [];
 
   function getWebSocketUrl() {
-    return (
-      (window.APP_CONFIG && window.APP_CONFIG.backend && window.APP_CONFIG.backend.wsUrl) ||
-      'ws://localhost:5000/chat'
-    );
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = (window.APP_CONFIG && window.APP_CONFIG.backend && window.APP_CONFIG.backend.wsUrl)
+      ? window.APP_CONFIG.backend.wsUrl
+      : `${wsProtocol}//${window.location.host}/chat`;
+    return (wsUrl);
   }
 
   function setConnectionState(state) {
@@ -420,6 +421,42 @@
     }
 
     switch (type) {
+      case 'update_chat_title':
+        window.Events.emit('server:chat_title_updated', {
+          chatId: data.chat_id || data.chatId || data.id,
+          title: data.title || '' // Changed from data.content
+        });
+        break;
+
+      case 'toggle_pinning_chat':
+        window.Events.emit('server:toggle_pinning_chat', {
+          chatId: data.chat_id || data.chatId || data.id
+        });
+        break;
+
+      case 'delete_chat':
+        window.Events.emit('server:delete_chat', {
+          chatId: data.chat_id || data.chatId || data.id
+        });
+        break;
+      case 'models_list':
+        window.Events.emit('server:models_list', data.models || {});
+        break;
+
+      case 'current_model_setting':
+      case 'current_model_settings':
+        window.Events.emit('server:current_model_setting', {
+          model: data.model || null,
+          effort: data.effort || null
+        });
+        break;
+      case 'update_chat_title':
+        window.Events.emit('server:chat_title_updated', {
+          chatId: data.chat_id || data.chatId || window.AppState.currentChatId,
+          title: data.content || data.title || data.name || ''
+        });
+        break;
+        
       case 'history':
         window.Events.emit('server:history', data);
         break;
@@ -563,8 +600,32 @@
         : Promise.reject(new Error('Failed to send remove_chat_session.'));
     },
 
+    updateModelSettings(model, effort) {
+      const ok = sendToServer({
+        type: 'update_model_settings',
+        model,
+        effort
+      });
+      return ok
+        ? Promise.resolve({ ok: true })
+        : Promise.reject(new Error('WebSocket is not connected.'));
+    },
+
     isConnected() {
       return Boolean(this.websocket && this.websocket.readyState === WebSocket.OPEN);
+    },
+
+    togglePinningChat(chatId) {
+      sendToServer({ type: 'toggle_pinning_chat', chat_id: chatId });
+      return Promise.resolve();
+    },
+    updateChatTitle(chatId, title) {
+      sendToServer({ type: 'update_chat_title', chat_id: chatId, title });
+      return Promise.resolve();
+    },
+    deleteChat(chatId) {
+      sendToServer({ type: 'delete_chat', chat_id: chatId });
+      return Promise.resolve();
     },
 
     sendMessage(payload) {
@@ -682,6 +743,10 @@
     createChat: (options) => backend.createChat(options),
     getChatList: () => backend.getChatList(),
     sendAttachment: (payload) => backend.sendAttachment(payload),
-    joinChat: (chatId) => backend.joinChat(chatId)
+    joinChat: (chatId) => backend.joinChat(chatId),
+    updateModelSettings: (model, effort) => backend.updateModelSettings(model, effort),
+    togglePinningChat: (chatId) => backend.togglePinningChat(chatId),
+    updateChatTitle: (chatId, title) => backend.updateChatTitle(chatId, title),
+    deleteChat: (chatId) => backend.deleteChat(chatId),
   };
 })();

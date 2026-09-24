@@ -20,26 +20,19 @@
 
 ### Big problems
 
+- summary is called multible times
+
 ### Small problems
 
-- user message buttons appear on right of message instead of bottom
 - audio needs more controllers
 - IDEs need run button and select server (i think they are just disabled in configurations)
 - code IDE needs coloring
-- typing area on phone doesnt appear well
-- faild tools appear succeed if old chat is open
-- reasoning contents are merged
 
 ## TODO
 
-- generate title for chat
-- allow editing chat title
-- allow deleting chat
-- allow pinning chat
 - make command/code controllers stick at top of page
 - make stop generating button
 - make stop tool execution button
-- apply notes tools
 - add the ability to queue a user message between tool executions
-- apply memories
 - add cost calculator
+- add pagination to chats list

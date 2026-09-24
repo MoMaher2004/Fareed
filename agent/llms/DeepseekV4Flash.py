@@ -2,7 +2,7 @@ from llms.Deepseek import Deepseek
 from datetime import time
 
 class DeepseekV4Flash(Deepseek):
-    efforts = ["low", "high", "max"]
+    efforts = ["none", "low", "high", "max"]
     name = "deepseek-v4-flash"
     costs = {
         "inputCashHit_offPeak": 0.007,

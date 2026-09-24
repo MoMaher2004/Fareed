@@ -2,7 +2,7 @@ from llms.Deepseek import Deepseek
 from datetime import time
 
 class DeepseekV4Pro(Deepseek):
-    efforts = ["low", "high", "max"]
+    efforts = ["none", "low", "high", "max"]
     name = "deepseek-v4-pro"
     costs = {
         "inputCashHit_offPeak": 0.022,

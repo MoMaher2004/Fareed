@@ -5,7 +5,7 @@
     try {
       hljs.highlightElement(codeEl);
     } catch (error) {
-      // Highlighting is optional.
+      // Highlighting is optional — ignore errors.
     }
   }
 
@@ -23,6 +23,7 @@
     const codeEl = window.DomUtils.el('code', { class: `language-${language}` }, code);
     pre.append(codeEl);
 
+    // Apply highlighting immediately if not streaming.
     if (!options.streaming) {
       highlightElement(codeEl);
     }
@@ -34,11 +35,14 @@
     function append(text) {
       code += String(text ?? '');
       codeEl.textContent = code;
+      // Remove highlight classes during streaming to avoid stale highlighting.
+      codeEl.removeAttribute('data-highlighted');
     }
 
     function replace(text) {
       code = String(text ?? '');
       codeEl.textContent = code;
+      codeEl.removeAttribute('data-highlighted');
     }
 
     function finalize() {
@@ -69,7 +73,6 @@
       const runBtn = window.DomUtils.iconButton('bi-play-fill', 'Run code', (button) => {
         runCode(button);
       });
-
       actions.append(runBtn);
     }
 

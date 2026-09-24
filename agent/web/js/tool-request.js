@@ -315,9 +315,15 @@
       });
   }
 
+  function clear() {
+    window.AppState.toolRequests = [];
+    render();
+  }
+
   window.ToolRequestPanel = {
     init,
     handleChunk,
+    clear,
     render
   };
 })();

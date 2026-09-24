@@ -3,6 +3,7 @@ from tools.Artifact import Artifact
 from tools.Tool import Tool
 import traceback
 import json
+from termcolor import cprint
 
 SYSTEM_MESSAGE = """You are Fareed's conversation summarization model.
 
@@ -211,8 +212,6 @@ tools_schema = []
 async def startup_summarizer():
     tools_schema = await Tool.tools_pack(pack_names=["artifacts"], modelName=modelName)
 
-import time
-
 async def summarizer(messages, oldSummary=None, notes=None):
     history = [
         {
@@ -235,6 +234,7 @@ async def summarizer(messages, oldSummary=None, notes=None):
     while True:
         try:
             message = await client.chat(history=history, tools_schema=tools_schema)
+            cprint(message, "blue")
             if message.finish_reason == "stop":
                 return message.message.content
             elif message.finish_reason == "tool_calls":
@@ -249,3 +249,16 @@ async def summarizer(messages, oldSummary=None, notes=None):
         except Exception as e:
             print(traceback.format_exc())
             exit()
+
+async def generate_title(message: str):
+    title = await client.chat(history=[
+            {
+                "role": "system",
+                "content": "Generate a very short title that is 20 to 50 characters from user message."
+            },
+            {
+                "role": "user",
+                "content": message
+            }
+        ], tools_schema=[])
+    return title.message.content

@@ -6,6 +6,7 @@ import json
 from termcolor import cprint
 import ast
 from copy import deepcopy
+from utils.ToolCallParser import ToolCallParser
 
 class AbstractModel(ABC):
     url: str = None
@@ -13,6 +14,7 @@ class AbstractModel(ABC):
     efforts: list = None
     name: str = None
     costs: dict = None
+    tool_usage: dict = True
     contextWindow: int = None
     maxOutputTokens: int = None
     supportsVision: bool = None
@@ -21,6 +23,7 @@ class AbstractModel(ABC):
     reasoning_score: float = None
     tool_call_score: float = None
     speed_score: float = None
+    parser = ToolCallParser(raw_fields={"code"})
 
     @abstractmethod
     def mapFinishReason(reason):
@@ -50,7 +53,7 @@ class AbstractModel(ABC):
         return history
 
     @classmethod
-    async def stream(cls, history, tools_schema = []):
+    async def stream(cls, history, tools_schema = [], effort = None):
         try:
             toolsSchema = tools_schema
             content = []
@@ -62,8 +65,9 @@ class AbstractModel(ABC):
             for r in OpenAI(api_key=cls.apiKey, base_url=cls.url).chat.completions.create(
                 model=cls.name,
                 messages=history,
-                tools=toolsSchema,
-                stream=True
+                tools=toolsSchema if cls.tool_usage else None,
+                stream=True,
+                reasoning_effort=effort
             ):
                 if getattr(
                     r.choices[0],
@@ -77,19 +81,20 @@ class AbstractModel(ABC):
                 ) == cls.mapFinishReason("tool_calls"):
                     for tc in tool_calls:
                         raw = ''.join(tc['arguments'])
-                        try:
-                            tc['arguments'] = json.loads(raw)
-                        except (json.JSONDecodeError, TypeError):
-                            tc['arguments'] = ast.literal_eval(raw)
+                        tc['arguments'] = cls.parser.parse(raw)
+                        # try:
+                        #     tc['arguments'] = json.loads(raw)
+                        # except (json.JSONDecodeError, TypeError):
+                        #     tc['arguments'] = ast.literal_eval(raw)
 
                         if isinstance(tc['arguments'], dict) and 'arguments' in tc['arguments']:
                             tc['arguments'] = tc['arguments']['arguments']
 
-                        if isinstance(tc['arguments'], str):
-                            try:
-                                tc['arguments'] = json.loads(tc['arguments'])
-                            except (json.JSONDecodeError, TypeError):
-                                tc['arguments'] = ast.literal_eval(tc['arguments'])
+                        # if isinstance(tc['arguments'], str):
+                        #     try:
+                        #         tc['arguments'] = json.loads(tc['arguments'])
+                        #     except (json.JSONDecodeError, TypeError):
+                        #         tc['arguments'] = ast.literal_eval(tc['arguments'])
                     yield {'type': 'tool_calls', 'tool_calls': json.loads(json.dumps(tool_calls))}
                 elif r.choices[0].delta.tool_calls != None:
                     if r.choices[0].delta.tool_calls[0].function.name:
@@ -115,7 +120,7 @@ class AbstractModel(ABC):
             print(traceback.format_exc())
 
     @classmethod
-    async def chat(cls, history, tools_schema=[]):
+    async def chat(cls, history, tools_schema=[], effort=None):
         try:
             toolsSchema = tools_schema
 
@@ -128,7 +133,8 @@ class AbstractModel(ABC):
                 model=cls.name,
                 messages=history,
                 tools=toolsSchema,
-                stream=False
+                stream=False,
+                reasoning_effort=effort
             )
 
             message = response.choices[0]

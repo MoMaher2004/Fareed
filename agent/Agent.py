@@ -62,16 +62,6 @@ tools_map = {
 }
 
 models = {
-    "deepseek-chat": {
-        "name": "deepseek-chat",
-        "api_key": os.getenv("DEEPSEEK_API_KEY"),
-        "base_url": "https://api.deepseek.com/v1"
-    },
-    "deepseek-reasoner": {
-        "name": "deepseek-reasoner",
-        "api_key": os.getenv("DEEPSEEK_API_KEY"),
-        "base_url": "https://api.deepseek.com/v1"
-    },
     "dphn/Dolphin-Mistral-24B-Venice-Edition:featherless-ai": {
         "name": "dphn/Dolphin-Mistral-24B-Venice-Edition:featherless-ai",
         "api_key": os.getenv("HF_TOKEN"),

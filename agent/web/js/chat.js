@@ -39,6 +39,10 @@
 
     finalizeStreamingMessage();
 
+    if (window.ToolRequestPanel) {
+      window.ToolRequestPanel.clear();
+    }
+
     window.AppState.currentChatId = null;
 
     if (updateUrl) {
@@ -86,7 +90,73 @@
     return String(content);
   }
 
+  function extractToolStatus(source) {
+    if (!source || typeof source !== 'object') return null;
+
+    const directCandidates = [
+      source.status,
+      source.state,
+      source.result_status,
+      source.resultStatus,
+      source.tool_status,
+      source.toolStatus,
+      source.execution_status,
+      source.executionStatus
+    ];
+
+    for (const value of directCandidates) {
+      if (value !== undefined && value !== null && value !== '') {
+        return value;
+      }
+    }
+
+    const nestedSources = [];
+
+    if (source.result && typeof source.result === 'object') {
+      nestedSources.push(source.result);
+    }
+
+    if (source.content && typeof source.content === 'object') {
+      nestedSources.push(source.content);
+    }
+
+    if (source.data && typeof source.data === 'object') {
+      nestedSources.push(source.data);
+    }
+
+    if (source.tool && typeof source.tool === 'object') {
+      nestedSources.push(source.tool);
+    }
+
+    for (const nested of nestedSources) {
+      const nestedCandidates = [
+        nested.status,
+        nested.state,
+        nested.result_status,
+        nested.resultStatus,
+        nested.tool_status,
+        nested.toolStatus,
+        nested.execution_status,
+        nested.executionStatus
+      ];
+
+      for (const value of nestedCandidates) {
+        if (value !== undefined && value !== null && value !== '') {
+          return value;
+        }
+      }
+    }
+
+    return null;
+  }
+
   function normalizeHistoryToolResult(entry) {
+    const result =
+      entry.result ??
+      entry.response ??
+      entry.output ??
+      null;
+
     return {
       callId:
         entry.tool_call_id ||
@@ -107,18 +177,19 @@
         entry.args ??
         undefined,
 
-      result:
-        entry.result ??
-        entry.response ??
-        entry.output ??
-        null,
+      result,
 
       error:
         entry.error ??
+        entry.failed ??
+        entry.is_error ??
+        entry.isError ??
+        (result && typeof result === 'object'
+          ? result.error ?? result.exception ?? result.traceback
+          : null) ??
         null,
 
-      status:
-        entry.status || 'done'
+      status: extractToolStatus(entry)
     };
   }
 
@@ -214,7 +285,8 @@
         entry.result !== undefined
       ) {
         const controller = ensureAssistantController();
-        controller.completeTool(normalizeHistoryToolResult(entry));
+        const normalizedTool = normalizeHistoryToolResult(entry);
+        controller.completeTool(normalizedTool);
         return;
       }
 
@@ -652,6 +724,10 @@
 
     // Stop any active streaming response before switching/opening a chat.
     finalizeStreamingMessage();
+
+    if (window.ToolRequestPanel) {
+      window.ToolRequestPanel.clear();
+    }
 
     // Set the current chat ID.
     window.AppState.currentChatId = chatId;

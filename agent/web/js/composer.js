@@ -13,6 +13,14 @@
     heights: []
   };
 
+  const modelSettings = {
+    bar: null,
+    modelSelect: null,
+    effortSelect: null,
+    models: {},
+    updating: false
+  };
+
   function init() {
     elements.normal = document.getElementById('composer-normal');
     elements.recording = document.getElementById('composer-recording');
@@ -81,12 +89,116 @@
 
     elements.sendBtn.addEventListener('click', submit);
     updateSendButton();
+    initModelSettings();
   }
 
   function autoresize() {
     if (!elements.input) return;
     elements.input.style.height = 'auto';
     elements.input.style.height = `${Math.min(elements.input.scrollHeight, 200)}px`;
+  }
+
+  function initModelSettings() {
+    modelSettings.bar = document.getElementById('model-settings-bar');
+    modelSettings.modelSelect = document.getElementById('model-select');
+    modelSettings.effortSelect = document.getElementById('effort-select');
+
+    if (!modelSettings.bar || !modelSettings.modelSelect || !modelSettings.effortSelect) return;
+
+    modelSettings.modelSelect.addEventListener('change', () => {
+      if (modelSettings.updating) return;
+
+      const selectedModel = modelSettings.modelSelect.value;
+      populateEffortDropdown(selectedModel);
+
+      const firstEffort = modelSettings.effortSelect.options.length > 0
+        ? modelSettings.effortSelect.options[0].value
+        : null;
+
+      sendModelSettings(selectedModel, firstEffort);
+    });
+
+    modelSettings.effortSelect.addEventListener('change', () => {
+      if (modelSettings.updating) return;
+
+      const selectedModel = modelSettings.modelSelect.value;
+      const selectedEffort = modelSettings.effortSelect.value;
+
+      sendModelSettings(selectedModel, selectedEffort);
+    });
+  }
+
+  function populateModelDropdown(models) {
+    if (!modelSettings.modelSelect) return;
+
+    modelSettings.models = models || {};
+    const modelNames = Object.keys(modelSettings.models);
+
+    modelSettings.modelSelect.innerHTML = '';
+
+    if (modelNames.length === 0) {
+      if (modelSettings.bar) modelSettings.bar.classList.add('d-none');
+      return;
+    }
+
+    modelNames.forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      modelSettings.modelSelect.append(option);
+    });
+
+    if (modelSettings.bar) modelSettings.bar.classList.remove('d-none');
+  }
+
+  function populateEffortDropdown(modelName) {
+    if (!modelSettings.effortSelect) return;
+
+    const efforts = modelSettings.models[modelName] || [];
+
+    modelSettings.effortSelect.innerHTML = '';
+
+    efforts.forEach((effort) => {
+      const option = document.createElement('option');
+      option.value = effort;
+      option.textContent = effort;
+      modelSettings.effortSelect.append(option);
+    });
+  }
+
+  function setModelSettings(model, effort) {
+    if (!modelSettings.modelSelect || !modelSettings.effortSelect) return;
+
+    modelSettings.updating = true;
+
+    // Set model selection
+    if (model) {
+      modelSettings.modelSelect.value = model;
+    }
+
+    // Populate efforts for the selected model
+    const selectedModel = model || modelSettings.modelSelect.value;
+    populateEffortDropdown(selectedModel);
+
+    // Set effort selection
+    if (effort) {
+      modelSettings.effortSelect.value = effort;
+    }
+
+    modelSettings.updating = false;
+  }
+
+  function sendModelSettings(model, effort) {
+    if (!model && !effort) return;
+
+    window.AppState.currentModel = model;
+    window.AppState.currentEffort = effort;
+
+    if (window.Communication && window.Communication.updateModelSettings) {
+      window.Communication.updateModelSettings(model, effort).catch((error) => {
+        console.warn('Failed to update model settings:', error);
+      });
+    }
   }
 
   function canSend() {
@@ -345,6 +457,11 @@
   window.Composer = {
     init,
     clearInput,
-    setSendState
+    setSendState,
+    initModelSettings,
+    populateModelDropdown,
+    populateEffortDropdown,
+    setModelSettings,
+    sendModelSettings,
   };
 })();

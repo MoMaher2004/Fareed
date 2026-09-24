@@ -19,12 +19,12 @@ import traceback
 from tools.Tool import Tool
 from termcolor import cprint
 from utils.Parser import Parser
-from tools.summarizer import summarizer, startup_summarizer
+from tools.summarizer import summarizer, startup_summarizer, generate_title
+from tools.notebook import Notebook
 
-# Initialize llm_client and app
-llm_client = LLMClient(model_name="deepseek-v4-pro")
 app = FastAPI()
 
+default_tool_schema = [Tool.tools_pack_schema(), *Notebook.schema()]
 
 @app.on_event("startup")
 async def startup():
@@ -46,8 +46,11 @@ app.add_middleware(
 
 # Global state
 user_sessions = {}  # Maps client_id -> chat_id
+model_sessions = {}  # Maps client_id -> model_client
 active_connections = {}  # Maps client_id -> WebSocket
 histories = {}  # Maps chat_id -> {messages: [(role, content)], summary, locked: False, title, tool_requests: {tool_call_id: {name, args, type}}}
+
+# Default tool schema
 
 
 async def broadcast_to_chat(chat_id, event_type, data):
@@ -60,6 +63,14 @@ async def broadcast_to_chat(chat_id, event_type, data):
             except Exception as e:
                 print(f"Error broadcasting to {client_id}: {e}")
 
+async def global_broadcast(event_type, data):
+    message = {"type": event_type, **data}
+    for client_id, ws in list(active_connections.items()):
+        try:
+            await ws.send_json(message)
+        except Exception as e:
+            print(f"Error broadcasting to {client_id}: {e}")
+
 
 async def create_chat():
     """Create a new chat, cache it and return its ID"""
@@ -71,7 +82,8 @@ async def create_chat():
         "locked": False,
         "title": None,
         "tool_requests": {},
-        "parser": Parser()
+        "parser": Parser(),
+        "notebook": Notebook()
     }
     await broadcast_to_chat(chat["id"], "chat_lock", {"value": False})
     return chat["id"]
@@ -80,7 +92,7 @@ def tokenEstimator(messages):
     text = json.dumps(messages, ensure_ascii=False)
     return len(text) // 3
 
-async def start_chat_loop(chat_id: str, tools_schema = []):
+async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
     exit_loop = False
     while exit_loop == False:
         response_message = []
@@ -95,9 +107,10 @@ async def start_chat_loop(chat_id: str, tools_schema = []):
                     {histories[chat_id]["summary"]}
                     """
                 },
-                *histories[chat_id]["messages"][histories[chat_id]["summary_pointer"]:]
+                histories[chat_id]["notebook"].notesToSystemMessage(),
+                *histories[chat_id]["messages"][histories[chat_id]["summary_pointer"] or 0:]
             ],
-            tools_schema
+            [*tools_schema, *default_tool_schema]
         ):
             """
             chunk types: tool_calls, message, reasoning, error, end
@@ -116,13 +129,22 @@ async def start_chat_loop(chat_id: str, tools_schema = []):
                 for tool_call in chunk.get("tool_calls"):
                     await Tool.update_tool_call_status(tool_call["id"], "running")
                     await broadcast_to_chat(chat_id, "tool_start", {"tool_call_id": tool_call["id"], "name": tool_call["name"], "arguments": tool_call["arguments"]})
-                    result = await Tool.request_tool(
-                        modelName=llm_client.model.name,
-                        tool_call_id=tool_call["id"],
-                        tool_name=tool_call["name"],
-                        arguments=tool_call["arguments"],
-                        schema=tools_schema
-                    )
+                    result = None
+                    if tool_call["name"] in ["addNotes", "modifyNote", "deleteNotes", "deleteGroup"]:
+                        if tool_call["name"] == "addNotes": result = histories[chat_id]["notebook"].addNotes(**tool_call["arguments"])
+                        if tool_call["name"] == "modifyNote": result = histories[chat_id]["notebook"].modifyNote(**tool_call["arguments"])
+                        if tool_call["name"] == "deleteNotes": result = histories[chat_id]["notebook"].deleteNotes(**tool_call["arguments"])
+                        if tool_call["name"] == "deleteGroup": result = histories[chat_id]["notebook"].deleteGroup(**tool_call["arguments"])
+                        await Chat.update_notes(chat_id, histories[chat_id]["notebook"].notes)
+                        result["type"] = "tool_response"
+                    else:
+                        result = await Tool.request_tool(
+                            modelName=llm_client.model.name,
+                            tool_call_id=tool_call["id"],
+                            tool_name=tool_call["name"],
+                            arguments=tool_call["arguments"],
+                            schema=tools_schema
+                        )
                     await Tool.update_tool_call_status(tool_call["id"], result.get("status"))
 
                     if result.get('type') == "tool_response":
@@ -200,7 +222,7 @@ async def start_chat_loop(chat_id: str, tools_schema = []):
         unsummarized_messages = messages[summary_pointer:]
 
         if (
-            tokenEstimator(unsummarized_messages) >= 10000
+            tokenEstimator(unsummarized_messages) >= 1000
             and len(messages) - no_messages_not_included > summary_pointer
         ):
             safe_pointer = summary_pointer
@@ -219,11 +241,12 @@ async def start_chat_loop(chat_id: str, tools_schema = []):
                 new_summary = await summarizer(
                     messages[summary_pointer:safe_pointer],
                     oldSummary=histories[chat_id]["summary"],
-                    notes=None
+                    notes=histories[chat_id]["notebook"].notes
                 )
 
                 histories[chat_id]["summary"] = new_summary
                 histories[chat_id]["summary_pointer"] = safe_pointer
+                await Chat.update_summary(chat_id, new_summary, safe_pointer)
 
 
 def format_history(chat_id, messages):
@@ -233,7 +256,8 @@ def format_history(chat_id, messages):
         elif m["role"] == "tool":
             formated_history.append({
                 "tool_call_id": m["tool_call_id"],
-                "result": m["content"]
+                "result": m["content"],
+                "status": m["status"],
             })
         elif m["role"] == "assistant":
             if m.get("reasoning_content"): formated_history.append({
@@ -278,7 +302,13 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     client_id = id(websocket)
     active_connections[client_id] = websocket
+    model = "deepseek-v4-flash"
+    effort = LLMClient.models[model].efforts[0]
+    model_sessions[client_id] = LLMClient(model_name=model, reasoning_effort=effort)
     tools_schema = []
+    await websocket.send_json({"type": "models_list", "models": {n: m.efforts for n, m in LLMClient.models.items()}})
+    await websocket.send_json({"type": "current_model_setting", "model": model, "effort": effort})
+    await asyncio.sleep(0)
 
     try:
         chats = await Chat.get_chats()
@@ -304,7 +334,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             "summary_pointer": chat["summary_pointer"] or 0,
                             "tool_requests": chat.get("tool_requests", {}),
                             "locked": False,
-                            "parser": Parser()
+                            "parser": Parser(),
+                            "notebook": Notebook()
                         }
                         for m in chat['messages']:
                             if m.get("tool_calls"):
@@ -370,7 +401,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await broadcast_to_chat(chat_id, "tool_result", {"tool_call_id": tool_call_id, "result": tool_message.get('full_content'), "status": result.get('status')})
                 del histories[user_sessions[client_id]]["tool_requests"][tool_call_id]
                 if len(histories[user_sessions[client_id]]["tool_requests"]) == 0:
-                    async for _ in start_chat_loop(chat_id, tools_schema=tools_schema):
+                    async for _ in start_chat_loop(chat_id, tools_schema=tools_schema, llm_client=model_sessions[client_id]):
                         if _['type'] == 'update_settings' and _['tools_schema'] and len(_['tools_schema']) > 0:
                             tools_schema = _['tools_schema']
             elif event_type == "message":
@@ -401,17 +432,50 @@ async def websocket_endpoint(websocket: WebSocket):
                     "role": "system" if is_system_message else "user",
                     "content": message,
                 }
+                if len(histories[chat_id]["messages"]) == 0:
+                    title = await generate_title(message)
+                    histories[chat_id]["title"] = title
+                    await Chat.update_title(chat_id, title)
+                    await global_broadcast("update_chat_title", {"title": title, "chat_id": chat_id})
                 await Message.save_message(chat_id, formated_message)
                 histories[chat_id]["messages"].append(formated_message)
 
-                async for _ in start_chat_loop(chat_id, tools_schema=tools_schema):
+                async for _ in start_chat_loop(chat_id, tools_schema=tools_schema, llm_client=model_sessions[client_id]):
                     if _['type'] == 'update_settings':
                         tools_schema = _['tools_schema']
 
             elif event_type == "get_chats_list":
                 chats = await Chat.get_chats()
-                await ws.send_json({"type": "chats_list", "chats": chats})
+                await websocket.send_json({"type": "chats_list", "chats": chats})
                 await asyncio.sleep(0)
+
+            elif event_type == "update_chat_title":
+                title = data.get('title')
+                chat_id = data.get('chat_id')
+                await Chat.update_title(chat_id, title)
+                await global_broadcast("update_chat_title", {"title": title, "chat_id": chat_id})
+
+            elif event_type == "toggle_pinning_chat":
+                chat_id = data.get('chat_id')
+                await Chat.toggle_pinning_chat(chat_id)
+                await global_broadcast("toggle_pinning_chat", {"chat_id": chat_id})
+
+            elif event_type == "delete_chat":
+                chat_id = data.get('chat_id')
+                await Chat.delete_chat(chat_id)
+                await global_broadcast("delete_chat", {"chat_id": chat_id})
+
+            elif event_type == "update_model_settings":
+                model = data.get("model")
+                effort = data.get("effort")
+                try:
+                    model_sessions[client_id] = LLMClient(model_name=model, reasoning_effort=effort)
+                    await websocket.send_json({"type": "current_model_setting", "model": model, "effort": effort})
+                    await asyncio.sleep(0)
+                except Exception as e:
+                    cprint(traceback.print_exc(), "red")
+                    await websocket.send_json({"type": "error", "content": traceback.print_exc()})
+                    await asyncio.sleep(0)
 
             elif event_type == "remove_chat_session":
                 asyncio.create_task(cleanup_chat_when_empty(user_sessions.get(client_id)))
@@ -427,6 +491,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
         if client_id in active_connections:
             del active_connections[client_id]
+            del model_sessions[client_id]
 
         if chat_id is not None and chat_id in histories:
             asyncio.create_task(cleanup_chat_when_empty(chat_id))
