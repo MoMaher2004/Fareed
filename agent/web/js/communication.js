@@ -439,6 +439,9 @@
           chatId: data.chat_id || data.chatId || data.id
         });
         break;
+      case 'transcription':
+        window.Events.emit('server:transcription', data);
+        break;
       case 'models_list':
         window.Events.emit('server:models_list', data.models || {});
         break;
@@ -449,6 +452,12 @@
           model: data.model || null,
           effort: data.effort || null
         });
+        break;
+      case 'file_upload_status':
+        window.Events.emit('server:file_upload_status', data);
+        break;
+      case 'user_message':
+        window.Events.emit('server:user_message', data);
         break;
       case 'update_chat_title':
         window.Events.emit('server:chat_title_updated', {
@@ -505,6 +514,9 @@
 
       case 'connection_status':
         window.Events.emit('server:connection_status', data.status || 'disconnected');
+        break;
+      case 'instructions_list':
+        window.Events.emit('server:instructions_list', data.instructions || []);
         break;
 
       case 'message':
@@ -600,6 +612,23 @@
         : Promise.reject(new Error('Failed to send remove_chat_session.'));
     },
 
+    sendTranscriptionAudio(blob) {
+      const socket = this.websocket;
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return Promise.reject(new Error('WebSocket is not connected.'));
+      }
+
+      return blob.arrayBuffer().then(buffer => {
+        const audioData = new Uint8Array(buffer);
+        // Binary frame: [1 byte = 0x01][audio bytes in WebM]
+        const frame = new Uint8Array(1 + audioData.length);
+        frame[0] = 0x01; // Channel 1 = transcription audio
+        frame.set(audioData, 1);
+        socket.send(frame);
+        return { ok: true };
+      });
+    },
+
     updateModelSettings(model, effort) {
       const ok = sendToServer({
         type: 'update_model_settings',
@@ -660,6 +689,56 @@
         : Promise.reject(new Error('Failed to queue join_chat.'));
     },
 
+    startFileUpload(metadata) {
+      const ok = sendToServer({
+        type: 'start_file_upload',
+        name: metadata.name,
+        size: metadata.size,
+        mime_type: metadata.mime_type,
+        chunk_size: metadata.chunk_size,
+        file_id: metadata.file_id
+      });
+      return ok ? Promise.resolve() : Promise.reject(new Error('WebSocket is not connected.'));
+    },
+
+    sendFileChunk(fileId, chunkData) {
+      const socket = this.websocket;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+
+      // Convert UUID string to 16 bytes
+      const hex = fileId.replace(/-/g, '');
+      const uuidBytes = new Uint8Array(16);
+      for (let i = 0; i < 16; i++) {
+        uuidBytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+      }
+
+      // Binary frame: [1 byte = 0x00][16 bytes UUID][content bytes]
+      const frame = new Uint8Array(1 + 16 + chunkData.length);
+      frame[0] = 0x00; // Channel 0 for file upload
+      frame.set(uuidBytes, 1);
+      frame.set(chunkData, 17);
+
+      socket.send(frame);
+      return true;
+    },
+
+    finishFileUpload(fileId, encoding) {
+      const ok = sendToServer({
+        type: 'finish_file_upload',
+        file_id: fileId,
+        encoding: encoding
+      });
+      return ok ? Promise.resolve() : Promise.reject(new Error('WebSocket is not connected.'));
+    },
+
+    cancelFileUpload(fileId) {
+      const ok = sendToServer({
+        type: 'cancel_file_upload',
+        file_id: fileId
+      });
+      return ok ? Promise.resolve({ ok: true }) : Promise.reject(new Error('WebSocket is not connected.'));
+    },
+
     sendToolResponse(payload) {
       const ok = sendToServer({
         type: 'tool_response',
@@ -669,6 +748,29 @@
       return ok
         ? Promise.resolve({ ok: true })
         : Promise.reject(new Error('WebSocket is not connected.'));
+    },
+
+    addInstruction(payload = {}) {
+      const ok = sendToServer({
+        type: 'add_instruction',
+        name: String(payload?.name ?? ''),
+        instructions: String(payload?.instructions ?? ''),
+        keywords: Array.isArray(payload?.keywords)
+          ? payload.keywords.map(String)
+          : [],
+        embeddings: Array.isArray(payload?.embeddings)
+          ? payload.embeddings.map(String)
+          : []
+      });
+
+      return ok
+        ? Promise.resolve({ ok: true })
+        : Promise.reject(new Error('WebSocket is not connected.'));
+    },
+
+    deleteInstruction(id) {
+      const ok = sendToServer({ type: 'delete_instruction', id });
+      return ok ? Promise.resolve() : Promise.reject(new Error('WebSocket is not connected.'));
     },
 
     sendFeedback(payload) {
@@ -687,17 +789,25 @@
     },
 
     requestCodeExecution() {
-      console.warn('Communication.requestCodeExecution: real backend not implemented.');
       return Promise.resolve();
     },
 
     requestAvailableServers() {
-      console.warn('Communication.requestAvailableServers: real backend not implemented.');
       return Promise.resolve([]);
     },
 
     loadChatHistory() {
       return Promise.resolve([]);
+    },
+
+    stopCurrentStream() {
+      const ok = sendToServer({
+        type: 'stop_current_stream'
+      });
+
+      return ok
+        ? Promise.resolve({ ok: true })
+        : Promise.reject(new Error('WebSocket is not connected.'));
     },
 
     loadChat(chatId) {
@@ -748,5 +858,13 @@
     togglePinningChat: (chatId) => backend.togglePinningChat(chatId),
     updateChatTitle: (chatId, title) => backend.updateChatTitle(chatId, title),
     deleteChat: (chatId) => backend.deleteChat(chatId),
+    deleteInstruction: (id) => backend.deleteInstruction(id),
+    addInstruction: (payload) => backend.addInstruction(payload),
+    stopCurrentStream: () => backend.stopCurrentStream(),
+    startFileUpload: (metadata) => backend.startFileUpload(metadata),
+    sendFileChunk: (fileId, chunkData) => backend.sendFileChunk(fileId, chunkData),
+    finishFileUpload: (fileId, encoding) => backend.finishFileUpload(fileId, encoding),
+    cancelFileUpload: (fileId) => backend.cancelFileUpload(fileId),
+    sendTranscriptionAudio: (blob) => backend.sendTranscriptionAudio(blob),
   };
 })();

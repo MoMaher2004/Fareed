@@ -1,2 +1,5 @@
 tools/sandbox
 .env
+shared
+temp
+testing

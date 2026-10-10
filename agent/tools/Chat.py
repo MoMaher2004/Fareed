@@ -167,7 +167,24 @@ class Chat:
                         tm.tool_call_id AS tool_message_tool_call_id,
                         tm.content AS tool_content,
 
-                        tc.status AS status
+                        tc.status AS status,
+
+                        COALESCE(
+                            (
+                                SELECT jsonb_agg(
+                                    jsonb_build_object(
+                                        'id', f.id,
+                                        'name', f.name,
+                                        'mime_type', f.mime_type,
+                                        'size', f.size
+                                    )
+                                    ORDER BY f.id
+                                )
+                                FROM files AS f
+                                WHERE f.message_id = m.id
+                            ),
+                            '[]'::jsonb
+                        ) AS uploads
 
                     FROM Message AS m
 
@@ -293,7 +310,8 @@ class Chat:
             if role == 'user':
                 messages.append({
                     'role': 'user',
-                    'content': row['user_content']
+                    'content': row['user_content'],
+                    'uploads': row['uploads']
                 })
 
             elif role == 'system':
@@ -332,8 +350,6 @@ class Chat:
         
         chat['created_at'] = time_utils.fromUTC(chat['created_at'])
         chat['updated_at'] = time_utils.fromUTC(chat['updated_at'])
-
-        cprint(messages, "green")
 
         return {
             'title': chat['title'],

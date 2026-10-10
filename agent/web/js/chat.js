@@ -23,6 +23,15 @@
       });
     }
 
+    window.Events.on('server:user_message', (data) => {
+      const userRoot = window.MessageComponents.createUserMessage({
+        id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        content: extractUserText(data.content),
+        uploads: data.uploads || []
+      });
+      appendRoot(userRoot);
+    });
+
     window.Events.on('chat:contentChanged', () => onContentChanged(false));
   }
 
@@ -252,7 +261,8 @@
 
         const userRoot = window.MessageComponents.createUserMessage({
           id: `user_history_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          content: extractUserText(entry.content)
+          content: extractUserText(entry.content),
+          uploads: entry.uploads || []
         });
 
         appendRoot(userRoot);
@@ -295,6 +305,10 @@
       // -----------------------------
       if (entry.role === 'assistant') {
         const controller = ensureAssistantController();
+
+        if (entry.uploads && entry.uploads.length > 0) {
+          controller.addUploads(entry.uploads);
+        }
 
         if (entry.type === 'reasoning') {
           controller.appendReasoning(entry.content ?? '');
@@ -689,6 +703,7 @@
     window.AppState.isStreaming = false;
     window.AppState.streamingMessageId = null;
     window.Events.emit('stream:ended');
+    window.Events.emit('sendState', 'enabled');
   }
 
   function notifyContentChanged() {
@@ -792,19 +807,17 @@
 
     finalizeStreamingMessage();
 
-    const userRoot = window.MessageComponents.createUserMessage({
-      id: `user_${Date.now()}`,
-      content: value
-    });
+    // Clear attached files from the UI immediately
+    if (window.FileUpload && window.FileUpload.clearAll) {
+      window.FileUpload.clearAll();
+    }
 
-    appendRoot(userRoot);
+    // DO NOT render the user message here. 
+    // The backend will send it back via the 'user_message' event.
+
     window.HotAnswers.clear();
     window.Events.emit('sendState', 'processing');
 
-    // ✅ FIX: Just use the current chat ID. 
-    // If it is null (new chat), we send it without an ID.
-    // The backend will create the chat and send back the real ID 
-    // via the 'chatId' or 'chat_created' event, which will update the URL automatically.
     const chatId = window.AppState.currentChatId;
 
     try {

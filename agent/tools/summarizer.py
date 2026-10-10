@@ -203,9 +203,9 @@ Do not return separate sections for "analysis", "reasoning", or "decision making
 The output must be the updated summary itself.
 """
 
-modelName = "deepseek-v4-flash"
+modelName = "gpt-5.6-luna"
 
-client = LLMClient(modelName)
+client = LLMClient(model_name=modelName, reasoning_effort='none')
 
 tools_schema = []
 
@@ -234,7 +234,6 @@ async def summarizer(messages, oldSummary=None, notes=None):
     while True:
         try:
             message = await client.chat(history=history, tools_schema=tools_schema)
-            cprint(message, "blue")
             if message.finish_reason == "stop":
                 return message.message.content
             elif message.finish_reason == "tool_calls":
@@ -254,7 +253,7 @@ async def generate_title(message: str):
     title = await client.chat(history=[
             {
                 "role": "system",
-                "content": "Generate a very short title that is 20 to 50 characters from user message."
+                "content": "Generate a very short title that is 20 to 50 characters from user message without markdown characters."
             },
             {
                 "role": "user",

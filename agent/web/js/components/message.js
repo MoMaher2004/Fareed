@@ -1,56 +1,55 @@
 (function () {
-  function createUserMessage({ id, content }) {
+  function containsArabic(text) {
+    return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(String(text ?? ''));
+  }
+
+  function applyTextDirection(el, text) {
+    if (!el) return;
+
+    if (containsArabic(text)) {
+      el.setAttribute('dir', 'rtl');
+    } else {
+      el.removeAttribute('dir');
+    }
+  }
+
+  function createUserMessage({ id, content, uploads }) {
     let currentContent = String(content ?? '');
-    let editing = false;
-    let textarea = null;
 
     const bubble = window.DomUtils.el('div', { class: 'message-bubble user-bubble' }, currentContent);
+    
+    // Keep RTL support if you added it previously
+    if (typeof applyTextDirection === 'function') applyTextDirection(bubble, currentContent);
 
     const copyButton = window.DomUtils.iconButton('bi-clipboard', 'Copy message', async (button) => {
-      await window.DomUtils.copyText(editing && textarea ? textarea.value : currentContent);
+      await window.DomUtils.copyText(currentContent);
       window.DomUtils.flashButton(button, 'bi-clipboard', 'bi-check');
     });
 
-    const editButton = window.DomUtils.iconButton('bi-pencil', 'Edit message', () => {
-      startEdit();
-    });
-
-    const actions = window.DomUtils.el('div', { class: 'message-actions' }, copyButton, editButton);
+    // Only copy button now
+    const actions = window.DomUtils.el('div', { class: 'message-actions' }, copyButton);
     
-    // Wrap bubble and actions in a column layout
-    const wrapper = window.DomUtils.el('div', { class: 'user-message-wrapper' }, bubble, actions);
+    const wrapperChildren = [bubble];
+
+    // Render uploads if they exist
+    if (Array.isArray(uploads) && uploads.length > 0) {
+      const uploadsContainer = window.DomUtils.el('div', { class: 'message-uploads' });
+      uploads.forEach(up => {
+        const type = up.file_type || up.mime_type || '';
+        const iconClass = window.FileUpload ? window.FileUpload.getFileIcon(type) : 'bi-file-earmark';
+        const card = window.DomUtils.el('div', { class: 'history-upload-card' },
+          window.DomUtils.el('i', { class: `bi ${iconClass}` }),
+          window.DomUtils.el('span', { class: 'history-upload-name' }, up.file_name || up.name || 'File')
+        );
+        uploadsContainer.append(card);
+      });
+      wrapperChildren.push(uploadsContainer);
+    }
+
+    wrapperChildren.push(actions);
+
+    const wrapper = window.DomUtils.el('div', { class: 'user-message-wrapper' }, ...wrapperChildren);
     const root = window.DomUtils.el('div', { class: 'message user-message', 'data-message-id': id || '' }, wrapper);
-
-    function startEdit() {
-      if (editing) return;
-      editing = true;
-
-      textarea = window.DomUtils.el('textarea', { class: 'form-control edit-area', rows: 3 }, currentContent);
-      const save = window.DomUtils.el('button', { type: 'button', class: 'btn btn-sm btn-primary' }, 'Save');
-      const cancel = window.DomUtils.el('button', { type: 'button', class: 'btn btn-sm btn-outline-secondary' }, 'Cancel');
-      const editActions = window.DomUtils.el('div', { class: 'edit-actions' }, save, cancel);
-
-      save.addEventListener('click', () => {
-        currentContent = textarea.value;
-        finishEdit();
-        window.Events.emit('message:edited', { id, content: currentContent });
-      });
-
-      cancel.addEventListener('click', () => {
-        finishEdit();
-      });
-
-      // Replace wrapper contents with edit mode
-      wrapper.replaceChildren(textarea, editActions);
-      textarea.focus();
-    }
-
-    function finishEdit() {
-      editing = false;
-      bubble.textContent = currentContent;
-      // Restore normal view
-      wrapper.replaceChildren(bubble, actions);
-    }
 
     return root;
   }
@@ -113,6 +112,7 @@
 
         const segment = window.DomUtils.el('div', { class: 'markdown-body' });
         segment.innerHTML = window.MarkdownRenderer.render(text);
+        applyTextDirection(segment, text);
 
         contentEl.append(segment);
 
@@ -382,6 +382,7 @@
           this.markdownScheduled = false;
           if (!this.markdownEl) return;
           this.markdownEl.innerHTML = window.MarkdownRenderer.render(this.markdownText);
+          applyTextDirection(this.markdownEl, this.markdownText);
         });
       },
 
@@ -400,6 +401,7 @@
         this.ensureMarkdown();
         this.markdownText += String(text ?? '');
         this.markdownEl.innerHTML = window.MarkdownRenderer.render(this.markdownText);
+        applyTextDirection(this.markdownEl, this.markdownText);
         this.highlight();
       },
 
@@ -554,6 +556,24 @@
         this.rawBlocks.push(`[image: ${data.src || data.url || ''}]`);
       },
 
+      addUploads(uploads) {
+        this.closeReasoning();
+        this.breakRichBlock();
+        if (!Array.isArray(uploads) || uploads.length === 0) return;
+        
+        const container = window.DomUtils.el('div', { class: 'message-uploads' });
+        uploads.forEach(up => {
+          const type = up.file_type || up.mime_type || '';
+          const iconClass = window.FileUpload ? window.FileUpload.getFileIcon(type) : 'bi-file-earmark';
+          const card = window.DomUtils.el('div', { class: 'history-upload-card' },
+            window.DomUtils.el('i', { class: `bi ${iconClass}` }),
+            window.DomUtils.el('span', { class: 'history-upload-name' }, up.file_name || up.name || 'File')
+          );
+          container.append(card);
+        });
+        contentEl.append(container);
+      },
+
       addAudio(data) {
         this.closeReasoning();
         this.breakRichBlock();
@@ -624,6 +644,7 @@
         if (this.markdownEl) {
           this.markdownEl.innerHTML = window.MarkdownRenderer.render(this.markdownText);
           this.markdownEl.classList.remove('streaming-markdown');
+          applyTextDirection(this.markdownEl, this.markdownText);
           this.highlight();
         }
 

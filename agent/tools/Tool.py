@@ -91,7 +91,7 @@ class Tool:
                                 "additionalProperties": False
                             }
                         }
-                    }
+                    } if t["type"] == "function" else {"type": t["type"]}
                     schema.append(formatted_tool)
                 return schema
     
@@ -105,6 +105,8 @@ class Tool:
         "runnersList": tools.PythonRunner.runnersList,
         "getArtifact": tools.Artifact.getArtifact,
         "createArtifact": tools.Artifact.createArtifact,
+        "search_instructions": tools.Instruction.search_instructions,
+        "get_instruction": tools.Instruction.get_instruction,
     }
 
     async def execute_tool(tool_call_id: str, tool_request: dict, modelName: str = None, schema = []) -> dict:

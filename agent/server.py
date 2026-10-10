@@ -14,17 +14,23 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from utils.system_message import system_message
-from tools.DB import DB
+from tools.DB import DB, dict_row
 import traceback
 from tools.Tool import Tool
 from termcolor import cprint
 from utils.Parser import Parser
 from tools.summarizer import summarizer, startup_summarizer, generate_title
 from tools.notebook import Notebook
+from tools import Instruction
+from uuid import UUID
+from tools.OpenAI_STT import OpenAI_STT
+import hashlib
+import os
+import uuid
 
 app = FastAPI()
 
-default_tool_schema = [Tool.tools_pack_schema(), *Notebook.schema()]
+default_tool_schema = [Tool.tools_pack_schema(), *Notebook.schema(), *Instruction.schema()]
 
 @app.on_event("startup")
 async def startup():
@@ -34,6 +40,10 @@ async def startup():
 
 BASE_DIR = Path(__file__).resolve().parent
 
+Path(os.getenv("SHARED_DIR")).mkdir(parents=True, exist_ok=True)
+Path(os.getenv("TEMP_DIR")).mkdir(parents=True, exist_ok=True)
+
+stt = OpenAI_STT()
 
 # CORS middleware
 app.add_middleware(
@@ -50,12 +60,94 @@ model_sessions = {}  # Maps client_id -> model_client
 active_connections = {}  # Maps client_id -> WebSocket
 histories = {}  # Maps chat_id -> {messages: [(role, content)], summary, locked: False, title, tool_requests: {tool_call_id: {name, args, type}}}
 
-# Default tool schema
+def get_file_type(mime_type):
+    if not mime_type:
+        return "other"
 
+    if mime_type.startswith("image/"):
+        return "image"
+
+    if mime_type.startswith("video/"):
+        return "video"
+
+    if mime_type.startswith("audio/"):
+        return "audio"
+
+    if mime_type == "application/pdf":
+        return "pdf"
+
+    if mime_type in {
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.oasis.opendocument.text",
+        "text/plain",
+        "text/rtf",
+    }:
+        return "document"
+
+    if mime_type in {
+        "application/json",
+        "application/xml",
+        "text/xml",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/x-python",
+        "text/x-java-source",
+    }:
+        return "code"
+
+    if mime_type in {
+        "application/zip",
+        "application/x-7z-compressed",
+        "application/x-rar-compressed",
+        "application/gzip",
+    }:
+        return "archive"
+
+    if mime_type in {
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/csv",
+    }:
+        return "spreadsheet"
+
+    if mime_type in {
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }:
+        return "presentation"
+
+    return "other"
+
+def make_json_safe(value):
+    if isinstance(value, UUID):
+        return str(value)
+
+    if isinstance(value, dict):
+        return {
+            key: make_json_safe(val)
+            for key, val in value.items()
+        }
+
+    if isinstance(value, list):
+        return [
+            make_json_safe(item)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+        return [
+            make_json_safe(item)
+            for item in value
+        ]
+
+    return value
 
 async def broadcast_to_chat(chat_id, event_type, data):
     """Broadcast a message to all clients in a chat"""
-    message = {"type": event_type, **data}
+    message = {"type": event_type, **make_json_safe(data)}
     for client_id, ws in list(active_connections.items()):
         if user_sessions.get(client_id) == chat_id:
             try:
@@ -64,7 +156,7 @@ async def broadcast_to_chat(chat_id, event_type, data):
                 print(f"Error broadcasting to {client_id}: {e}")
 
 async def global_broadcast(event_type, data):
-    message = {"type": event_type, **data}
+    message = {"type": event_type, **make_json_safe(data)}
     for client_id, ws in list(active_connections.items()):
         try:
             await ws.send_json(message)
@@ -83,14 +175,18 @@ async def create_chat():
         "title": None,
         "tool_requests": {},
         "parser": Parser(),
-        "notebook": Notebook()
+        "notebook": Notebook(),
+        "uploads": {}
     }
     await broadcast_to_chat(chat["id"], "chat_lock", {"value": False})
     return chat["id"]
 
 def tokenEstimator(messages):
-    text = json.dumps(messages, ensure_ascii=False)
-    return len(text) // 3
+    # text = json.dumps(messages, ensure_ascii=False)
+    sum = 0
+    for m in messages:
+        sum += len((m.get("content", "") or "") + (m.get("reasoning", "") or ""))
+    return sum // 3
 
 async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
     exit_loop = False
@@ -130,11 +226,13 @@ async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
                     await Tool.update_tool_call_status(tool_call["id"], "running")
                     await broadcast_to_chat(chat_id, "tool_start", {"tool_call_id": tool_call["id"], "name": tool_call["name"], "arguments": tool_call["arguments"]})
                     result = None
-                    if tool_call["name"] in ["addNotes", "modifyNote", "deleteNotes", "deleteGroup"]:
+                    if tool_call["name"] in ["addNotes", "modifyNote", "deleteNotes", "deleteGroup", "search_instructions", "get_instruction"]:
                         if tool_call["name"] == "addNotes": result = histories[chat_id]["notebook"].addNotes(**tool_call["arguments"])
                         if tool_call["name"] == "modifyNote": result = histories[chat_id]["notebook"].modifyNote(**tool_call["arguments"])
                         if tool_call["name"] == "deleteNotes": result = histories[chat_id]["notebook"].deleteNotes(**tool_call["arguments"])
                         if tool_call["name"] == "deleteGroup": result = histories[chat_id]["notebook"].deleteGroup(**tool_call["arguments"])
+                        if tool_call["name"] == "search_instructions": result = await Instruction.search_instructions(**tool_call["arguments"])
+                        if tool_call["name"] == "get_instruction": result = await Instruction.get_instruction(**tool_call["arguments"])
                         await Chat.update_notes(chat_id, histories[chat_id]["notebook"].notes)
                         result["type"] = "tool_response"
                     else:
@@ -145,6 +243,7 @@ async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
                             arguments=tool_call["arguments"],
                             schema=tools_schema
                         )
+
                     await Tool.update_tool_call_status(tool_call["id"], result.get("status"))
 
                     if result.get('type') == "tool_response":
@@ -215,7 +314,7 @@ async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
                 exit_loop = True
 
         # summarize
-        no_messages_not_included = 15
+        no_messages_not_included = 10
         summary_pointer = histories[chat_id]["summary_pointer"]
         messages = histories[chat_id]["messages"]
 
@@ -243,7 +342,6 @@ async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
                     oldSummary=histories[chat_id]["summary"],
                     notes=histories[chat_id]["notebook"].notes
                 )
-
                 histories[chat_id]["summary"] = new_summary
                 histories[chat_id]["summary_pointer"] = safe_pointer
                 await Chat.update_summary(chat_id, new_summary, safe_pointer)
@@ -252,7 +350,8 @@ async def start_chat_loop(chat_id: str, tools_schema = [], llm_client = None):
 def format_history(chat_id, messages):
     formated_history = []
     for m in messages:
-        if m["role"] == "user": formated_history.append(m)
+        if m["role"] == "user":
+            formated_history.append(m)
         elif m["role"] == "tool":
             formated_history.append({
                 "tool_call_id": m["tool_call_id"],
@@ -295,19 +394,24 @@ async def cleanup_chat_when_empty(chat_id):
             del histories[chat_id]
             break
 
+def byte_type_map(b):
+    types = ["file_chunk_recieved", "transcription"]
+    return "unknown" if len(types) - 1 > int(b) else types[b]
 
-# WebSocket endpoint
+# WebSocket chat endpoint
 @app.websocket("/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     client_id = id(websocket)
     active_connections[client_id] = websocket
-    model = "deepseek-v4-flash"
+    model = "gpt-5.6-luna"
     effort = LLMClient.models[model].efforts[0]
     model_sessions[client_id] = LLMClient(model_name=model, reasoning_effort=effort)
     tools_schema = []
     await websocket.send_json({"type": "models_list", "models": {n: m.efforts for n, m in LLMClient.models.items()}})
     await websocket.send_json({"type": "current_model_setting", "model": model, "effort": effort})
+    instructions_list = await Instruction.get_instructions_list()
+    await websocket.send_json({"type": "instructions_list", "instructions": instructions_list})
     await asyncio.sleep(0)
 
     try:
@@ -315,13 +419,23 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.send_json({"type": "chats_list", "chats": chats})
         await asyncio.sleep(0)
         while True:
-            data = await websocket.receive_json()
-            event_type = data.get("type")
+            data = await websocket.receive()
+            event_type = None
+            if data.get("text") is not None:
+                data = json.loads(data["text"])
+                event_type = data.get("type")
+            elif data.get("bytes") is not None:
+                event_type = byte_type_map(data["bytes"][0])
+                data = data["bytes"][1:]
 
             if event_type == "join_chat":
                 chat_id = data.get("chat_id")
                 if chat_id not in histories:
                     chat = await Chat.get_chat(chat_id)
+                    for m in chat["messages"]:
+                        if len(m.get("uploads", {})):
+                            for f in m["uploads"]:
+                                f["type"] = get_file_type(f["mime_type"])
                     if chat is None:
                         await websocket.send_json(
                             {"type": "error", "message": "Chat not found"}
@@ -335,7 +449,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             "tool_requests": chat.get("tool_requests", {}),
                             "locked": False,
                             "parser": Parser(),
-                            "notebook": Notebook()
+                            "notebook": Notebook(),
+                            "uploads": {}
                         }
                         for m in chat['messages']:
                             if m.get("tool_calls"):
@@ -423,20 +538,23 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     continue
 
-                histories[chat_id]['locked'] = True
-                await broadcast_to_chat(chat_id, "chat_lock", {"value": True})
                 message = data.get("message")
                 is_system_message = data.get("is_system_message", False)
 
                 formated_message = {
                     "role": "system" if is_system_message else "user",
                     "content": message,
+                    "uploads": list(histories[chat_id].get("uploads", {}).values())
                 }
+                histories[chat_id]['locked'] = True
+                await broadcast_to_chat(chat_id, "user_message", formated_message)
+                await broadcast_to_chat(chat_id, "chat_lock", {"value": True})
+                histories[chat_id]["uploads"] = {}
                 if len(histories[chat_id]["messages"]) == 0:
                     title = await generate_title(message)
                     histories[chat_id]["title"] = title
                     await Chat.update_title(chat_id, title)
-                    await global_broadcast("update_chat_title", {"title": title, "chat_id": chat_id})
+                    await global_broadcast("update_chat_title", {"title": title, "chat_id": str(chat_id)})
                 await Message.save_message(chat_id, formated_message)
                 histories[chat_id]["messages"].append(formated_message)
 
@@ -465,6 +583,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 await Chat.delete_chat(chat_id)
                 await global_broadcast("delete_chat", {"chat_id": chat_id})
 
+            elif event_type == "delete_instruction":
+                instruction_id = data.get('id')
+                await Instruction.delete_instruction(instruction_id)
+                instructions_list = await Instruction.get_instructions_list()
+                await global_broadcast("instructions_list", {"instructions": instructions_list})
+
+            elif event_type == "add_instruction":
+                name = data.get('name')
+                instructions = data.get('instructions')
+                keywords = data.get('keywords')
+                embeddings = data.get('embeddings')
+                await Instruction.add_instruction(name=name, instructions=instructions, keywords=keywords, descriptions=embeddings)
+                instructions_list = await Instruction.get_instructions_list()
+                await global_broadcast("instructions_list", {"instructions": instructions_list})
+
+            elif event_type == "stop_current_stream":
+                await model_sessions[client_id].stop_stream()
             elif event_type == "update_model_settings":
                 model = data.get("model")
                 effort = data.get("effort")
@@ -473,13 +608,84 @@ async def websocket_endpoint(websocket: WebSocket):
                     await websocket.send_json({"type": "current_model_setting", "model": model, "effort": effort})
                     await asyncio.sleep(0)
                 except Exception as e:
-                    cprint(traceback.print_exc(), "red")
                     await websocket.send_json({"type": "error", "content": traceback.print_exc()})
                     await asyncio.sleep(0)
 
             elif event_type == "remove_chat_session":
                 asyncio.create_task(cleanup_chat_when_empty(user_sessions.get(client_id)))
-                del user_sessions[client_id]
+                user_sessions.pop(client_id, None)
+            elif event_type == "start_file_upload":
+                file_name = data["name"]
+                file_size = data["size"]
+                mime_type = data["mime_type"]
+                chunk_size = data["chunk_size"]
+                file_id = data["file_id"]
+                chat_id = None
+                if user_sessions.get(client_id) is None:
+                    chat_id = await create_chat()
+                    user_sessions[client_id] = chat_id
+                else:
+                    chat_id = user_sessions[client_id]
+                histories[chat_id].get("uploads", {})[file_id] = {
+                    "file_id": file_id,
+                    "file_name": file_name,
+                    "file_size": file_size,
+                    "mime_type": mime_type,
+                    "chunk_size": chunk_size,
+                    "encoding": hashlib.sha256(),
+                    "file": open(Path(os.getenv("TEMP_DIR"), file_id), "wb"),
+                }
+            elif event_type == "file_chunk_recieved":
+                file_id = str(uuid.UUID(bytes=data[:16]))
+                chunk = data[16:]
+                chat_id = user_sessions[client_id]
+                histories[chat_id]["uploads"][file_id]["file"].write(chunk)
+                histories[chat_id]["uploads"][file_id]["encoding"].update(chunk)
+            elif event_type == "finish_file_upload":
+                file_id = data["file_id"]
+                file = histories[chat_id]["uploads"][file_id]
+                encoding = data["encoding"]
+                chat_id = user_sessions[client_id]
+                if file["encoding"].hexdigest() != encoding:
+                    await websocket.send_json(
+                        {"type": "file_upload_status", "status": "failed", "file_id": file_id, "message": "encoding mismatch"}
+                    )
+                else:
+                    os.rename(
+                        Path(os.getenv("TEMP_DIR"), file_id),
+                        Path(os.getenv("SHARED_DIR"), file_id)
+                    )
+                    file["encoding"] = None
+                    file["file"] = None
+                    async with DB.connection() as conn:
+                        async with conn.cursor(row_factory=dict_row) as cursor:
+                            await cursor.execute(
+                                f"""INSERT INTO files (id, name, size, mime_type)
+                                VALUES (%s, %s, %s, %s)""",
+                                (file_id, file["file_name"], file["file_size"], file["mime_type"])
+                            )
+                    await websocket.send_json(
+                        {"type": "file_upload_status", "status": "success", "file_type": get_file_type(histories[chat_id]["uploads"][file_id]["mime_type"]), "file_id": file_id}
+                    )
+            elif event_type == "cancel_file_upload":
+                file_id = data["file_id"]
+                async with DB.connection() as conn:
+                    async with conn.cursor(row_factory=dict_row) as cursor:
+                        await cursor.execute(
+                            f"""DELETE FROM files WHERE id = %s""",
+                            (file_id,)
+                        )
+                Path(os.getenv("TEMP_DIR"), file_id).unlink(missing_ok=True)
+                Path(os.getenv("SHARED_DIR"), file_id).unlink(missing_ok=True)
+                del histories[chat_id]["uploads"][file_id]
+            elif event_type == "transcription":
+                audio = data
+                result = stt.transcribe(
+                    audio_bytes=audio,
+                    keywords=[],
+                )
+                result["type"] = "transcription"
+                await websocket.send_json(result)
 
     except Exception as e:
         cprint(traceback.print_exc(), "red")
@@ -487,7 +693,7 @@ async def websocket_endpoint(websocket: WebSocket):
         chat_id = user_sessions.get(client_id)
 
         if client_id in user_sessions:
-            del user_sessions[client_id]
+            user_sessions.pop(client_id, None)
 
         if client_id in active_connections:
             del active_connections[client_id]

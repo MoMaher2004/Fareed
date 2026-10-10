@@ -21,13 +21,18 @@ window.APP_CONFIG = {
     wsUrl: '',
     sseUrl: '',
     uploadUrl: '/api/uploads',
-    transcriptionUrl: '/api/transcribe',
     executionUrl: '/api/execute'
   },
 
+  fileUpload: {
+    chunkSize: 1024 * 1024,
+    maxParallelUploads: 5,
+    maxFileSize: 100 * 1024 * 1024,
+  },
+
   features: {
-    voiceInput: false,
-    attachments: false,
+    voiceInput: true,
+    attachments: true,
     temporaryChat: false,
     reasoning: true,
     toolUsage: true,

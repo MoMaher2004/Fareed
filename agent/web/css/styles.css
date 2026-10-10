@@ -749,35 +749,41 @@ align-items: center;
 gap: 6px;
 }
 #composer-input {
-flex: 1;
-min-width: 0;
-border: 0;
-outline: 0;
-resize: none;
-background: transparent;
-color: var(--text);
-max-height: 200px;
-padding: 7px 4px;
-line-height: 1.5;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  max-height: 200px;
+  min-height: 38px; /* ADD THIS: Prevents the textarea from collapsing to 14px */
+  padding: 7px 4px;
+  line-height: 1.5;
 }
+
 .composer-recording {
-width: min(920px, 100%);
-margin: 0 auto;
-display: flex;
-align-items: center;
-gap: 12px;
-border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
-background: var(--bg);
-border-radius: 18px;
-padding: 10px;
-box-shadow: var(--shadow);
+  width: min(920px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--border));
+  background: var(--bg);
+  border-radius: 18px;
+  padding: 10px;
+  box-shadow: var(--shadow);
+  overflow: hidden; /* ADD THIS */
 }
+
 #waveform {
-flex: 1;
-width: 100%;
-height: 64px;
-border-radius: 12px;
-background: color-mix(in srgb, var(--muted) 8%, transparent);
+  flex: 1;
+  width: 100%;
+  min-width: 0;    /* ADD THIS: allows canvas to shrink below its 600px intrinsic width */
+  max-width: 100%; /* ADD THIS: hard cap at container width */
+  height: 64px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
 }
 .rec-error {
 display: flex;
@@ -1118,4 +1124,376 @@ min-width: 100px;
 .code-viewer-body {
   background: var(--code-bg);
   color: var(--code-text);
+}
+
+/* Instructions Panel */
+.instructions-list {
+  display: grid;
+  gap: 6px;
+}
+
+.instruction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.instruction-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+/* Keyword Tags */
+.keyword-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.keyword-remove {
+  cursor: pointer;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+
+.keyword-remove:hover {
+  color: var(--danger);
+}
+
+/* Embeddings */
+.embedding-row input {
+  flex: 1;
+}
+
+.embedding-remove-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.send-btn.processing {
+  background: var(--danger);
+  color: #fff;
+}
+
+.send-btn.processing:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 86%, #000);
+}
+
+.markdown-body[dir="rtl"] {
+  text-align: right;
+}
+
+.user-bubble[dir="rtl"] {
+  text-align: right;
+}
+
+/* Keep code inside RTL text as LTR */
+.markdown-body[dir="rtl"] pre,
+.markdown-body[dir="rtl"] pre code,
+.markdown-body[dir="rtl"] code {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: embed;
+}
+
+/* File Upload Indicators */
+.file-upload-indicators {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 0 20px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.file-upload-card {
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  position: relative;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.file-upload-card.upload-active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.file-upload-card.upload-success {
+  border-color: color-mix(in srgb, #198754 40%, var(--border));
+}
+
+.file-upload-card.upload-failed {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  cursor: pointer;
+}
+
+.file-upload-icon {
+  font-size: 1.5rem;
+  color: var(--muted);
+}
+
+.file-upload-card.upload-active .file-upload-icon {
+  color: var(--accent);
+}
+
+.file-upload-status {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 0.85rem;
+}
+
+.file-upload-status .spin {
+  color: var(--accent);
+}
+
+.file-upload-status .bi-check-circle-fill {
+  color: #198754;
+}
+
+.file-upload-status .bi-x-circle-fill {
+  color: var(--danger);
+}
+
+.file-upload-name {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* File Upload Cancel Button */
+.file-upload-cancel {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  z-index: 2;
+  transition: all 0.15s ease;
+}
+
+.file-upload-cancel:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.file-upload-card.upload-success .file-upload-cancel:hover,
+.file-upload-card.upload-failed .file-upload-cancel:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ─── Historical Uploads in Messages ──────────────────────────────── */
+.message-uploads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.history-upload-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 0.85rem;
+  color: var(--text);
+  max-width: 240px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.history-upload-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
+}
+
+.history-upload-card i {
+  font-size: 1.25rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.history-upload-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  min-width: 0;
+}
+
+/* Dark theme adjustments */
+[data-bs-theme="dark"] .history-upload-card {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+[data-bs-theme="dark"] .history-upload-card:hover {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Mobile: allow cards to take more width */
+@media (max-width: 576px) {
+  .history-upload-card {
+    max-width: 100%;
+  }
+}
+
+/* ─── Live File Upload Indicators (Composer Area) ─────────────────── */
+.file-upload-indicators {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  padding: 0 20px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.file-upload-card {
+  width: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  position: relative;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.file-upload-card.upload-active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.file-upload-card.upload-success {
+  border-color: color-mix(in srgb, #198754 40%, var(--border));
+}
+
+.file-upload-card.upload-failed {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  cursor: pointer;
+}
+
+.file-upload-icon {
+  font-size: 1.6rem;
+  color: var(--muted);
+}
+
+.file-upload-card.upload-active .file-upload-icon {
+  color: var(--accent);
+}
+
+.file-upload-status {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 0.9rem;
+}
+
+.file-upload-status .spin {
+  color: var(--accent);
+}
+
+.file-upload-status .bi-check-circle-fill {
+  color: #198754;
+}
+
+.file-upload-status .bi-x-circle-fill {
+  color: var(--danger);
+}
+
+.file-upload-name {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cancel / Close button on file upload card */
+.file-upload-cancel {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  z-index: 2;
+  transition: all 0.15s ease;
+}
+
+.file-upload-cancel:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.rec-timer {
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9rem;
+  color: var(--danger);
+  font-weight: 600;
+  min-width: 48px;
+  text-align: center;
+  flex-shrink: 0;
 }

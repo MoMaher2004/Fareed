@@ -31,6 +31,9 @@
     window.Composer.init();
     window.ToolRequestPanel.init();
     window.Feedback.init();
+    window.Instructions.init();
+    window.FileUpload.init();
+    window.FileUploadIndicator.init();
 
     if (window.visualViewport) {
       const setAppHeight = () => {

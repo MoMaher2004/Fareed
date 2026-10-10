@@ -57,6 +57,23 @@
 
     elements.actions.append(newChat);
 
+    const instructionsBtn = window.DomUtils.el('button', {
+      type: 'button',
+      class: 'drawer-action-btn'
+    },
+      window.DomUtils.el('i', { class: 'bi bi-journal-text' }),
+      'Instructions'
+    );
+
+    instructionsBtn.addEventListener('click', () => {
+      if (window.Instructions) {
+        window.Instructions.openInstructionsPanel();
+      }
+      closeOnMobile();
+    });
+
+    elements.actions.append(instructionsBtn);
+
     if (window.APP_CONFIG.features.temporaryChat) {
       const tempChat = window.DomUtils.el('button', { type: 'button', class: 'drawer-action-btn' },
         window.DomUtils.el('i', { class: 'bi bi-hourglass-split' }),

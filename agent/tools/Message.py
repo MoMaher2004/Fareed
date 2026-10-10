@@ -61,6 +61,12 @@ class Message:
                         (%s, %s)""",
                         (message_id, message['content'])
                     )
+                    if message.get("uploads") is not None and len(message["uploads"]) > 0:
+                        await cursor.execute(
+                            f"""UPDATE files SET message_id = %s
+                            WHERE id = ANY(%s)""",
+                            (message_id, list([f["file_id"] for f in message['uploads']]))
+                        )  
                 elif message['role'] == 'tool':
                     await cursor.execute(
                         f"""INSERT INTO Tool_message (message_id, tool_call_id, content) VALUES (%s, %s, %s)""",

@@ -17,7 +17,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.3/highlight.min.js"></script>
 
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/styles.css?v=2">
 
   <script defer src="/js/config.js"></script>
   <script defer src="/js/state.js"></script>
@@ -43,8 +43,11 @@
   <script defer src="/js/chat.js"></script>
   <script defer src="/js/composer.js"></script>
   <script defer src="/js/drawer.js"></script>
+  <script defer src="/js/instructions.js"></script>
   <script defer src="/js/tool-request.js"></script>
   <script defer src="/js/feedback.js"></script>
+  <script defer src="js/file-upload.js"></script>
+  <script defer src="js/file-upload-indicator.js"></script>
   <script defer src="/js/app.js"></script>
 </head>
 <body>
@@ -100,7 +103,8 @@
       </section>
 
       <div id="hot-answers" class="hot-answers d-none" aria-label="Suggested answers"></div>
-
+      
+      <div id="file-upload-indicators" class="file-upload-indicators"></div>
       <section id="composer" class="composer" aria-label="Message composer">
         <div id="composer-normal" class="composer-normal">
           <div class="composer-left">
@@ -138,6 +142,8 @@
           <button id="rec-cancel" class="icon-btn danger" type="button" aria-label="Cancel recording">
             <i class="bi bi-x-lg"></i>
           </button>
+
+          <span id="rec-timer" class="rec-timer">00:00</span>
 
           <canvas id="waveform" width="600" height="64" aria-hidden="true"></canvas>
 

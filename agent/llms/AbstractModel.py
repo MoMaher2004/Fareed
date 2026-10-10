@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from openai import OpenAI
+from openai import AsyncOpenAI
 from tools.Tool import Tool
 import traceback
 import json
@@ -24,6 +24,9 @@ class AbstractModel(ABC):
     tool_call_score: float = None
     speed_score: float = None
     parser = ToolCallParser(raw_fields={"code"})
+    current_stream = None
+    stop_current_stream: bool = False
+    client = AsyncOpenAI(api_key=apiKey, base_url=url)
 
     @abstractmethod
     def mapFinishReason(reason):
@@ -36,7 +39,10 @@ class AbstractModel(ABC):
             if m['role'] == 'system':
                 pass
             if m['role'] == 'user':
-                pass
+                m['content'] = m['content'] if len(m.get("uploads", {})) == 0 else str({
+                    "attachments": [{"id": f["file_id"], "name": f["file_name"]} for f in m.get("uploads", {})],
+                    "user_message": m['content']
+                })
             if m['role'] == 'tool':
                 if 'status' in m: del m['status']
                 if 'full_content' in m: del m['full_content']
@@ -62,13 +68,19 @@ class AbstractModel(ABC):
             tool = None
             
             history = cls.formate_history(history)
-            for r in OpenAI(api_key=cls.apiKey, base_url=cls.url).chat.completions.create(
+            cprint(history[2:], "yellow")
+            cls.stop_current_stream = False
+            cls.current_stream = await cls.client.chat.completions.create(
                 model=cls.name,
                 messages=history,
                 tools=toolsSchema if cls.tool_usage else None,
                 stream=True,
                 reasoning_effort=effort
-            ):
+            )
+            async for r in cls.current_stream:
+                if cls.stop_current_stream:
+                    cls.stop_current_stream = False
+                    break
                 if getattr(
                     r.choices[0],
                     cls.mapFinishReason("finish_reason")
@@ -120,16 +132,18 @@ class AbstractModel(ABC):
             print(traceback.format_exc())
 
     @classmethod
+    async def stop_stream(cls):
+        cls.stop_current_stream = True
+        await cls.current_stream.close()
+
+    @classmethod
     async def chat(cls, history, tools_schema=[], effort=None):
         try:
             toolsSchema = tools_schema
 
             history = cls.formate_history(history)
 
-            response = OpenAI(
-                api_key=cls.apiKey,
-                base_url=cls.url
-            ).chat.completions.create(
+            response = await cls.client.chat.completions.create(
                 model=cls.name,
                 messages=history,
                 tools=toolsSchema,
@@ -201,3 +215,5 @@ class AbstractModel(ABC):
                 "type": "error",
                 "content": "internal error: " + str(e)
             }
+
+    
